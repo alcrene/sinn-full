@@ -1,0 +1,11 @@
+{
+   "_tags": ["OU_AR", "OU_FiniteNoise"],  # Tags are removed from the
+                                          # parameter set by _scandir.py
+   "μtilde": [2.0, 0.0],
+   "logτtilde": [0.69, 0.69],
+   "logσtilde": [1.8, -0.92],
+   "Wtilde": [[0.5, 0.5],
+              [0.5, 0.5]],
+   "M": 2,
+   "Mtilde": 2
+}

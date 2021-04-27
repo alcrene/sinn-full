@@ -1,0 +1,71 @@
+#######################################################################################
+# A default configuration that will be loaded for all jupyter books
+# Users are expected to override these values in their own `_config.yml` file.
+# This is also the "master list" of all allowed keys and values.
+
+#######################################################################################
+# Book settings
+title                       : "Sinn-full project template"
+author                      : "Alexandre René"
+copyright                   : "2021"
+logo                        : ""
+exclude_patterns            : [_build, Thumbs.db, .DS_Store, "**.ipynb_checkpoints",
+                               ".*", "lib", "*.egg-info",
+                               "Optimize_WF_template"]
+only_build_toc_files        : false
+
+#######################################################################################
+# Execution settings
+execute:
+  execute_notebooks: "off"
+  exclude_patterns          : [Optimize_WF_template*]    # A list of patterns to *skip* in execution (e.g. a notebook that takes a really long time)
+
+#######################################################################################
+# Parse and render settings
+parse:
+  myst_enable_extensions:
+    - amsmath
+    - colon_fence
+    - deflist
+    - dollarmath
+    # - html_admonition
+    - html_image
+    - linkify
+    # - replacements
+    # - smartquotes
+    - substitution
+  myst_substitutions:
+    projectname: sinnfull
+
+#######################################################################################
+# HTML-specific settings
+html:
+  use_repository_button: true
+  use_issues_button: true
+
+#######################################################################################
+# LaTeX-specific settings
+latex:
+  latex_engine              : xelatex  # one of 'pdflatex', 'xelatex' (recommended for unicode), 'luatex', 'platex', 'uplatex'
+  use_jupyterbook_latex     : true # use jupyterbook-latex for pdf builds as default
+
+#######################################################################################
+# Launch button settings
+#launch_buttons:
+#  notebook_interface        : jupyterlab  # The interface interactive links will activate ["classic", "jupyterlab"]
+
+repository:
+  url: https://github.com/alcrene/sinnvoll
+  path_to_book              : ""  # A path to your book's folder, relative to the repository root.
+  branch                    : master  # Which branch of the repository should be used when creating links
+
+#######################################################################################
+# Advanced and power-user settings
+sphinx:
+  extra_extensions          :   # A list of extra extensions to load by Sphinx (added to those already used by JB).
+  local_extensions          :   # A list of local extensions to load by sphinx specified by "name: path" items
+  config                    :   # key-value pairs to directly over-ride the Sphinx configuration
+    nb_custom_formats:
+        .py:
+            - jupytext.reads
+            - fmt: py

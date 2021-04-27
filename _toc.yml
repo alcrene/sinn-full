@@ -1,0 +1,97 @@
+- file: README
+
+- part: Workflow components
+  chapters:
+  - file: sinnfull/data/index
+    sections:
+    - file: sinnfull/data/base
+    - file: sinnfull/data/template
+    - file: sinnfull/data/synthetic
+
+  - file: sinnfull/models/index
+    sections:
+    - file: sinnfull/models/base
+    # - file: sinnfull/models/objectives
+    - file: sinnfull/models/OU/OU
+      sections:
+      - file: sinnfull/models/OU/ou-priors
+      - file: sinnfull/models/OU/objectives
+    - file: sinnfull/models/WC/WC
+
+  - file: sinnfull/optim/index
+    sections:
+    - file: sinnfull/optim/base
+    - file: sinnfull/optim/recorders
+    - file: sinnfull/optim/convergence_tests
+    - file: sinnfull/optim/optimizers/index
+      sections:
+      - file: sinnfull/optim/optimizers/alternated_sgd
+      # - file: sinnfull/optim/optimizers/alternated_sgd_test_examples
+
+  - file: sinnfull/tasks/index
+    sections:
+    - file: sinnfull/tasks/base
+    - file: sinnfull/tasks/analysis
+
+- part: Workflows
+  chapters:
+  - file: sinnfull/workflows/index
+    sections:
+    - file: sinnfull/workflows/Generate tasks
+    - file: sinnfull/workflows/workflow_parameters
+    - file: sinnfull/workflows/Optimize_WF_template
+
+- part: Visualization
+  chapters:
+  - file: sinnfull/viz/index
+    sections:
+    - file: sinnfull/viz/config
+    - file: sinnfull/viz/record_store_viewer
+    - file: sinnfull/viz/dist
+    - file: sinnfull/viz/utils
+    - file: sinnfull/viz/hooks
+  - file: sinnfull/view/index
+    sections:
+    - file: sinnfull/view/Result viewer
+
+- part: Diagnostic & tuning
+  chapters:
+  - file: sinnfull/diagnostics/__init__
+    sections:
+    - file: sinnfull/diagnostics/one_step_cost
+    - file: sinnfull/diagnostics/utils
+  - file: sinnfull/diagnose/index
+    sections:
+    - file: sinnfull/diagnose/index-correctness
+      sections:
+      - file: sinnfull/diagnose/One-step-forward cost
+      - file: sinnfull/diagnose/Check stationary stats
+      - file: sinnfull/diagnose/Inspect_gradients
+      - file: sinnfull/diagnose/Inspect_logL
+    - file: sinnfull/diagnose/index-hyperparams
+      sections:
+      - file: sinnfull/diagnose/Fit_stability
+      - file: sinnfull/diagnose/Inspect_hyperparams
+    - file: sinnfull/diagnose/index-fit-dynamics
+      sections:
+      - file: sinnfull/diagnose/Check uniformity of gradients -- example
+    - file: sinnfull/diagnose/index-differing-runs
+      sections:
+      - file: sinnfull/diagnose/Compare_parameters
+      - file: sinnfull/diagnose/compare_tasks
+    - file: sinnfull/diagnose/index-debugging
+      sections:
+      - file: sinnfull/diagnose/Debugging_runtime_warnings
+  - file: sinnfull/tune/index.md
+
+- part: Other utilities
+  chapters:
+  - file: sinnfull/sampling
+  - file: sinnfull/rng
+  - file: sinnfull/utils
+
+# - part: Algorithmic verifications
+#   chapters:
+#   - file: sinnfull/algorithm_tests/index
+#     sections:
+#     - file: sinnfull/algorithm_tests/consistent_digest

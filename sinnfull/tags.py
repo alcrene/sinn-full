@@ -1,0 +1,213 @@
+# -*- coding: utf-8 -*-
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
+#     text_representation:
+#       extension: .py
+#       format_name: light
+#       format_version: '1.5'
+#   kernelspec:
+#     display_name: Python (comp)
+#     language: python
+#     name: comp
+# ---
+
+# # Tagged collections
+#
+# See also [models – Taming proliferation](tags-taming-model-proliferation).
+
+from __future__ import annotations
+from collections.abc import Iterable
+from typing import Dict
+
+class TaggedCollection(list):
+    tags: set
+    values: list
+    _squeeze: bool  # Whether to return a plain list when the set of tags is empty,
+                    # and an single element when the collection as length 1.
+                    # Applies only to __getitem__ and __getattr__
+                    # Default: True
+
+    @classmethod
+    def from_tagged_objects(cls, iterable, tag_attr='_tags', if_tag_attr_missing='skip'):
+        """
+        Create a `TaggedCollection` from objects which have been tagged by a
+        `TagDecorator` – i.e. have an attribute which stores a set of strings.
+        Default attribute name is '_tags', same as `TagDecorator.
+        By default, if an item in `iterable` does not contain an attribute
+        matching `tag_attr`, it is silently skipped. To raise an `AttributeError`
+        instead, pass ``if_tag_attr_missing='raise'``.
+        """
+        if if_tag_attr_missing == 'skip':
+            gen = ((x, getattr(x,tag_attr,None)) for x in iterable)
+            return cls(x_tags for x_tags in gen if x_tags[1] is not None)
+        else:
+            return cls((x, getattr(x,tag_attr)) for x in iterable)
+    @staticmethod
+    def _set_cast_str(tags):
+        if isinstance(tags, str):
+            return {tags}
+        else:
+            return set(tags)
+    def __init__(self, iterable: Iterable, squeeze=True):
+        super().__init__((x, self._set_cast_str(tags)) for x, tags in iterable)
+        ## Set self.tags
+        self.tags = set().union(*(tags for x,tags in self))
+        if not all(isinstance(tag, str) for tag in self.tags):
+            raise ValueError("All tags must be strings. Offending tags: "
+                             f"{[tag for tag in self.tags if not isinstance(tag, str)]}")
+        ## Set self.values
+        # Find duplicates
+        # by_id = {id(x):(i,x) for i,(x,tag) in enumerate(self)}
+        seen = {}
+        dups = {}
+        for x,tags in self:
+            if id(x) in seen:
+                if id(x) not in dup_ids:
+                    dup_ids[id(x)] = [seen[id(x)][1], tags]
+                else:
+                    dup_ids[id(x)].append(tags)
+            else:
+                seen[id(x)] = (x,tags)
+        invalid_dups = [(seen[xid][0],tag_sets) for xid,tag_sets in dups
+                        if any(tag_set != tag_sets[0] for tag_set in tag_sets)]
+        if invalid_dups:
+            raise ValueError("Multiple sets of tags were specified for the "
+                             f"following values: {invalid_dups}.")
+        self.values = [x for x,tags in seen.values()]
+        ## Set self._squeeze
+        self._squeeze = squeeze
+
+    def __str__(self):
+        return f"TaggedCollection<{len(self) items}, tags={self.tags}>"
+    def by_tag(self) -> Dict[frozenset, list]:
+        tag_sets = {}
+        for obj, tags in self:
+            tag_sets[frozenset(tags)] = obj
+        return tag_sets
+
+    def filter(self, tag, remove=False):
+        """
+        Return a TaggedCollection containing only the values matching the
+        provided tag(s).
+        If `tag` is a `set`, it should contain multiple tags. They must all
+        match for an element to be kept by the filter.
+        If `remove=True`, matching tags are removed from the elements of the
+        returned collection.
+        """
+        if isinstance(tag, set):
+            filter_tags = tag
+        else:
+            filter_tags = {tag}
+        remove_set = filter_tags if remove else {}
+        return TaggedCollection((x, tags-remove_set) for x, tags in self
+                                if not filter_tags - tags)
+    def _apply_squeeze(self, result):
+        if self._squeeze and len(result) == 1:
+            res = result[0]
+            # Attach the remaining tags to the result, so that overspecifying
+            # tags does not cause an error.
+            # Attributes simply point back to the object, so that indexing
+            # redundant tags is a noop
+            if result.tags:
+                for tag in result.tags:
+                    if not hasattr(res, tag):  # Don't overwrite existing attributes
+                        setattr(res, tag, res)
+            return res
+        elif self._squeeze and len(result.tags) == 0:
+            return result.values
+        else:
+            return result
+
+    def __getattr__(self, attr):
+        if attr in self.tags:
+            return self._apply_squeeze(self.filter(attr, remove=True))
+        else:
+            raise AttributeError(f"'{attr}' does not match any attribute or tags. "
+                                 f"Possible tags: {self.tags}.")
+    def __getitem__(self, key):
+        """
+        Two main interpretations of `key`
+          * Filter (key is str or Set[str])
+            -> return a filtered TaggedCollection
+          * Index (key is int or slice)
+            -> return an element (int) or list (slice)
+        """
+        if isinstance(key, str):
+            if key not in self.tags:
+                raise KeyError(f"'{key}' does not match any tags. "
+                               f"Possible tags: {self.tags}.")
+            return self._apply_squeeze(self.filter(key, remove=True))
+        elif isinstance(key, set):
+            if key - self.tags:
+                raise KeyError("The following values don't match any tags: "
+                               f"{key-self.tags}.\nPossible tags: {self.tags}.")
+            return self._apply_squeeze(self.filter(key, remove=True))
+        elif isinstance(key, int):
+            return super().__getitem__(key)[0]
+        elif isinstance(key, slice):
+            return [x[0] for x in super().__getitem__(key)]
+        else:
+            raise TypeError(f"Invalid key type {type(key)} – should be str, "
+                            "Set[str], int or slice")
+    def __contains__(self, key):
+        return key in self.values
+
+class TagDecorator:
+    def __init__(self, attribute_name='_tags'):
+        """
+        :param:attribute_name: The attribute name used to attach tags.
+        """
+        self.attr_name = attribute_name
+    def __call__(self, *tags):
+        def decorator(obj):
+            tag_attr = getattr(obj, self.attr_name, None)
+            if tag_attr is None:
+                setattr(obj, self.attr_name, set())
+                tag_attr = getattr(obj, self.attr_name)
+            elif not isinstance(tag_attr, set):
+                raise RuntimeError(f"Object {obj} already has an attribute "
+                                   f"named '{self.attr_name}'. Cannot use that "
+                                   "name to store tags.")
+            tag_attr.update(tags)
+            return obj
+        return decorator
+    def __getattr__(self, attr):
+        if attr == self.attr_name:
+            raise AttributeError(f"{attr} cannot be used as an tag name.")
+        return self(attr)
+
+if __name__ == "__main__":
+    coll = TaggedCollection([(set('abcdef'), {'alpha', 'contiguous'}),
+                             (set([1,2,3,4,5,6]), {'num', 'contiguous'}),
+                             ([1,2,30,41,100], 'num')])
+
+    assert coll.tags == {'alpha', 'contiguous', 'num'}
+    assert coll[0] == {'a', 'b', 'c', 'd', 'e', 'f'}
+    assert coll.num.tags == {'contiguous'}
+    assert coll.num.contiguous == {1, 2, 3, 4, 5, 6}  # squeeze, len 1 => single element
+    assert len(coll.num) == 2
+    assert coll.alpha == {'a', 'b', 'c', 'd', 'e', 'f'}  # squeeze, len 1 => single element
+    assert len(coll.contiguous) == 2
+
+    tag = TagDecorator()
+
+    @tag.alpha
+    @tag.num
+    class Foo:
+        pass
+
+    @tag('alpha', 'num')
+    class Bar:
+        pass
+
+    @tag.alpha
+    def Baz(x):
+        return x
+
+    coll2 = TaggedCollection.from_tagged_objects((Foo, Bar, Baz))
+    assert len(coll2) == 3
+    assert coll2.tags == {'alpha', 'num'}
+    assert Foo in coll2.num

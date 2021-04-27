@@ -1,0 +1,10 @@
+*.ipynb
+*.json
+*.hvz
+lib
+src
+*cache*
+
+_build
+/index.html
+  # Allow placing a symlink to the generated html book without bothering git
