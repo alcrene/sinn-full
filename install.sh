@@ -139,6 +139,16 @@ else
     exit
 fi
 
+# Determine which conda env files to merge
+# The found ENVYML is used as a stem for specialized files
+# TODO: Use the found ENVYML filename as a stem for suffixes
+env_files=$ENVYML
+stem="${ENVYML%.*}"
+ext="${1##*.}"
+if [ $INSTALL_LOCATION == "local" ] && [ -e $stem-local.$ext ]; then
+  env_files="$env_files $stem-local.$ext"
+fi
+
 # Verify with the user the auto-detected file names and paths
 
 if [ $doenvinstall == "y" ]; then
@@ -208,7 +218,7 @@ if [ $doenvinstall == "y" ]; then
       pip install -r "$file"
     done
   fi
-  
+
 else
   conda activate "$ENVDIR/$ENVNAME"
 

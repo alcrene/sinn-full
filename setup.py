@@ -1,24 +1,13 @@
-# ---
-# jupyter:
-#   jupytext:
-#     cell_metadata_filter: -all
-#     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
-#     text_representation:
-#       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-# ---
 
-
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
       name='sinnfull',
       version='0.1.0dev',
       description="",
-      python_requires=">=3.8"
+      python_requires=">=3.8",
 
-      author="",
+      author="Alexandre René",
       author_email="",
 
       license='MPL',
@@ -30,8 +19,17 @@ setup(
           'Programming Language :: Python :: 3 :: Only'
       ],
 
-      packages=["sinnfull"],
+      packages=find_packages(),
 
-      install_requires=[]  # see env.yaml
+      install_requires=[  # see also env.yaml
+          # Packages installed from repositories
+          'parameters',
+          'pymc3',
+          'sumatra>=0.8dev',
+          'theano_shim>=0.3.0',
+          'mackelab_toolbox[iotools,typing,utils,parameters]>=0.2.0a1',
+          'smttask>=0.2.0b1',
+          'sinn>=0.2.0rc1',
+      ]
 
  )

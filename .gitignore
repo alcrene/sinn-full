@@ -6,5 +6,10 @@ src
 *cache*
 
 _build
+/data
+  # Don't version control data
 /index.html
   # Allow placing a symlink to the generated html book without bothering git
+
+_merged_env.yaml
+.Rprofile

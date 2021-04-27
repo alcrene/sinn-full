@@ -1,0 +1,9 @@
+# smttask depends on mackelab-toolbox[iotools,typing,utils,parameters], and
+# the dependency resolver does not seem to recognize that this is the same
+# as the mackelab-toolbox[iotools,typing,theano,utils,parameters] in the
+# environment file.
+# Postponing the installation of smttask until after mackelab_toolbox is
+# installed avoids the issue
+# (From reading GitHub issues, the resolver _should_ merge extras, so this
+# probably works when installing from pip.)
+git+https://github.com/alcrene/smttask#egg=smttask

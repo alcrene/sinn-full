@@ -12,6 +12,9 @@ import argparse
 # - Try to obtain the repo URL with git
 # - Replace sinn-full URLs with the one that was obtained
 # - Add option, or ask during rename, for project name to put in _config.
+# - Add option, or ask during rename, for author
+#     + _config
+#     + setup.py
 
 root = Path(__file__).parent
 
