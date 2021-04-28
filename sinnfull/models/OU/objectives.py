@@ -25,8 +25,10 @@ if __name__ == "__main__":
 # %% tags=["hide-input"]
 import numpy as np
 import theano_shim as shim
-from sinnfull.models.objective_types import ObjectiveFunction
 from mackelab_toolbox.typing import IndexableNamespace
+
+from sinnfull.models.base import ObjectiveFunction, tag
+# from sinnfull.tags import TagDecorator
 
 # %% [markdown]
 # Objective functions must follow the usual limitations for being serializable: only use modules defined in `mackelab_toolbox.serialize.config.default_namespace` (these are listed in the cell below), or import additional modules within the function.
@@ -36,7 +38,6 @@ from mackelab_toolbox.typing import IndexableNamespace
 import numpy as np
 import math
 import theano_shim as shim
-
 
 # %% [markdown]
 # ## Public interface

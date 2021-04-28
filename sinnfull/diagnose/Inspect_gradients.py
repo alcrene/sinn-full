@@ -33,7 +33,7 @@
 # %%
 import sinnfull
 sinnfull.setup('theano')
-import sinnfull.optimization
+import sinnfull.optim
 sinnfull.diagnostics.set(True)
 #import sinn
 #sinn.config.trust_all_inputs = True  # Allow deserialization of arbitrary function
@@ -74,7 +74,7 @@ rec_data = RecordData('20210327-185932_1f6db8', ηhist='Itilde')
 # %% [markdown]
 #     # Workaround because runs were made before Recorders were fully unpackable
 #     from mackelab_toolbox.typing import Array
-#     from sinnfull.optimization.recorders import LogpRecorder, ΘRecorder
+#     from sinnfull.optim.recorders import LogpRecorder, ΘRecorder
 #     import sinnfull.diagnostics.utils
 #     kwargs = rec_data.logp.dict()
 #     kwargs['values'] = [float(Array.validate(v)) for v in kwargs['values']]

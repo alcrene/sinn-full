@@ -24,7 +24,7 @@ from mackelab_toolbox.parameters import ComputedParams
 
 from sinnfull.parameters import ParameterSet, ParameterRange, ParameterSpace
 from sinnfull.models import model_params, objectives
-from sinnfull.optimization import learning_params
+from sinnfull.optim import learning_params
 
 __all__ = ['WorkflowParams', 'OptimizeWorkflowParams']
 

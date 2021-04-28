@@ -73,11 +73,11 @@ import sinnfull.utils as utils
 from sinnfull.sampling import sample_batch_starts, SegmentSampler
 from sinnfull.parameters import ParameterSet
 from sinnfull.utils import add_to, add_property_to
-from sinnfull.models.objective_types import OptimParams, Prior, AccumulatedObjectiveFunction
-from sinnfull.optim.base import Optimizer, OptimizerStatus, clip_gradients
+from sinnfull.models.base import Prior, AccumulatedObjectiveFunction
+from sinnfull.optim.base import Optimizer, OptimParams, OptimizerStatus, clip_gradients
 from sinnfull.optim.convergence_tests import ConvergenceTest
 from sinnfull.optim.recorders import Recorder, DiagnosticRecorder
-    # Will be deprecated: we no longer needto attach recorders 
+    # Will be deprecated: we no longer needto attach recorders
 
 # %% tags=["remove-cell"]
 if __name__ == "__main__":
@@ -103,20 +103,20 @@ if __name__ == "__main__":
 #
 # These can be retrieved as `optimizer.<attr name>`.
 #
-# `Θ`  
-# ~ OptimParams; set of shared variables in _optimization space_.  
+# `Θ`
+# ~ OptimParams; set of shared variables in _optimization space_.
 # ~ Use the `init_params` argument to set it
 #
-# `fit_hyperparams`  
+# `fit_hyperparams`
 # ~ nested dict
 #
-# `observed_hists`  
+# `observed_hists`
 # ~ Set of `History` instances for which we have data.
 #
-# `latent_hists`  
+# `latent_hists`
 # ~ Set of `History` instances we need to infer.
 #
-# `stepi`  
+# `stepi`
 # ~ Number of optimization steps already performed
 #
 # :::
@@ -124,8 +124,8 @@ if __name__ == "__main__":
 # %% [markdown]
 # ### Forward and backward gradients
 #
-# :::{note}  
-# For historical reasons, the algorithm is presented using batches for both the gradient w.r.t. parameters and the gradient w.r.t. latents. In practice, we believe that using batches for the latents is unlikely to be helpful, and recommend setting $\mathcal{B}_i$ equal to the entire data segment in the expression for $g_η$ below.  
+# :::{note}
+# For historical reasons, the algorithm is presented using batches for both the gradient w.r.t. parameters and the gradient w.r.t. latents. In practice, we believe that using batches for the latents is unlikely to be helpful, and recommend setting $\mathcal{B}_i$ equal to the entire data segment in the expression for $g_η$ below.
 # :::
 #
 # We compute the gradient of the log likelihood using back-propagation through time (BPTT). As usual, we don't do this over the entire data set, but on batches of sequential data. A batch $\mathcal{B}_i$ runs from $k=b_i$ to $k=b_i + K_b + K_r$, where $K_b$ is the length of data used to compute the likelihood, and $K_r$ a time bin offset to allow for BPTT; this offset should be comparable with the **r**elaxation time scale of the dynamics. It is added either to the beginning or the end of the batch, depending on whether we optimize parameters or latents (see below). In order to be bin-size agnostic, in the algorithm $K_b$ and $K_r$ are specified in continuous time as $T_b$ and $T_r$, with $K_b := \lfloor T_b/Δt \rfloor$ and $K_r := \lfloor T_r/Δt \rfloor$.
@@ -172,14 +172,14 @@ class AlternatedSGD(Optimizer):
                  'compiled',
                  'diagnostics_recorders'  # Don't include in Pydantic model
                 )
-    
+
     logp_params        : Callable[[Integral, Integral], Tuple[List[FloatX],dict]]
     logp_latents       : Callable[[Integral, Integral], Tuple[List[FloatX],dict]]
     prior_params       : Prior
     prior_latents      : Optional[Prior]=None
     param_optimizer    : Callable=None
     latent_optimizer   : Callable=None
-        
+
     # DEPRECATION: Everything with 'nodyn' should probably be deprecated
     logp_default_nodyn : Optional[Callable[[Integral], FloatX]]=None
     logp_latents_nodyn : Callable[[Integral, Integral], Tuple[List[FloatX],dict]]
@@ -223,7 +223,7 @@ class AlternatedSGD(Optimizer):
     data_segments:
     observed_hists:
     latent_hists:
-    fit_hyperparams: 
+    fit_hyperparams:
     update_hyperparams:
         See `Optimizer`
     logp_params:
@@ -384,7 +384,7 @@ class AlternatedSGD(Optimizer):
         Rule: batched updates are used if the batch size and batch relaxation
         sizes sum to less than the data size.
         """
-        return (self.fit_hyperparams['Tηb'] + self.fit_hyperparams['Tηr'] 
+        return (self.fit_hyperparams['Tηb'] + self.fit_hyperparams['Tηr']
                 < self.fit_hyperparams['T'])
 
     def dict(self, *args, **kwargs):
@@ -467,7 +467,7 @@ class AlternatedSGD(Optimizer):
 #      2. (**TODO** Initialize differential equation histories with current inferred initial conditions.)
 #      3. Update hyperparameters.
 #    - **Parameter updates**
-#      1. Draw $N^θ_b$ start times for the batches:  
+#      1. Draw $N^θ_b$ start times for the batches:
 #         $b^θ \leftarrow$ [`sample_batch_starts`$(K, K^θ_b + K^θ_r, N^θ_b)$](./sampling.ipynb#Sampling-batches)
 #      5. Order the batches in **in**creasing order ($b^θ_1 < b^θ_2 < \dotsb$)
 #      6. For $b^θ_s$ in $b^θ$:
@@ -478,15 +478,15 @@ class AlternatedSGD(Optimizer):
 #      1. Finish integrating the model up to $K$.
 #      2. Repeat $N^η_b$ times:
 #          1. Compute $g_η'$ on the **entire** segment w.r.t $\step{s}{η}$ with Eq. [gη](eq:gradient-latents). (The vector $\step{s}{η}$ **includes** initial conditions).
-#          2. Update the latents on the segment with $\step{s}{η} = \step{s-1}{η} + λ_η \step{s}{g_η}$. 
+#          2. Update the latents on the segment with $\step{s}{η} = \step{s-1}{η} + λ_η \step{s}{g_η}$.
 #    - **Bookkeeping**
 #      1. Increment `stepi`.
 #      15. Invalidate stored histories for $k \geq 0$.
-# 4. If not converged, return to 2.  
+# 4. If not converged, return to 2.
 #    If converged, exit.
 #
-# :::{note}  
-# $N^θ_{b}$ should be set to a relatively small number and be roughly independent of data length $K$.  
+# :::{note}
+# $N^θ_{b}$ should be set to a relatively small number and be roughly independent of data length $K$.
 # :::
 #
 # ::::
@@ -514,7 +514,7 @@ class AlternatedSGD(Optimizer):
 #      2. (**TODO** Initialize differential equation histories with current inferred initial conditions.)
 #      3. Update hyperparameters.
 #    - **Parameter updates**
-#      1. Draw $N^θ_b$ start times for the batches:  
+#      1. Draw $N^θ_b$ start times for the batches:
 #         $b^θ \leftarrow$ [`sample_batch_starts`$(K, K^θ_b + K^θ_r, N^θ_b)$](./sampling.ipynb#Sampling-batches)
 #      5. Order the batches in **in**creasing order ($b^θ_1 < b^θ_2 < \dotsb$)
 #      6. For $b^θ_s$ in $b^θ$:
@@ -523,7 +523,7 @@ class AlternatedSGD(Optimizer):
 #          3. Update the parameters, e.g. with Adam.
 #    - **Latent updates**
 #      1. Finish integrating the model up to $K$.
-#      8. Draw $N^η_b$ start times for the batches:  
+#      8. Draw $N^η_b$ start times for the batches:
 #      $b^η \leftarrow$ [`sample_batch_starts`$(K, K^η_b + K^η_r, N^η_b)$](./sampling.ipynb#Sampling-batches)
 #      9. Order the batches in **de**creasing order ($b^η_1 > b^η_2 > \dotsb$)
 #      10. With $b^η_s = b^η_{1}$:
@@ -535,19 +535,19 @@ class AlternatedSGD(Optimizer):
 #          3. (Optional) Invalidate stored histories for $k \geq b^η$.
 #      12. With $b^η_s = b^η_{N^η_b}$:
 #          1. Compute $g_η$ on the segment $[b^η_s,b^η_s+K^η_b+K^η_r]$ with Eq. [gη], w.r.t. $η_{:b^η_s+K^η_b}$ ($η$ **includes** initial conditions).
-#          2. Update the latents on the segment with $\step{s}{η_{:b^η_s+K^η_b}} = \step{s-1}{η_{:b^η_s+K^η_b}} + λ_η \step{s}{g_η}$.  
+#          2. Update the latents on the segment with $\step{s}{η_{:b^η_s+K^η_b}} = \step{s-1}{η_{:b^η_s+K^η_b}} + λ_η \step{s}{g_η}$.
 #    - **Bookkeeping**
 #      1. Increment `stepi`.
 #      15. Invalidate stored histories for $k \geq 0$.
-# 4. If not converged, return to 2.  
+# 4. If not converged, return to 2.
 #    If converged, exit.
 #
-# :::{note}  
-# - $N^θ_{b}$ should be set to a relatively small number and be roughly independent of data length $K$; $N^η_b$ should be much larger since there are many more latent variables, and their gradients are easier to evaluate.  
+# :::{note}
+# - $N^θ_{b}$ should be set to a relatively small number and be roughly independent of data length $K$; $N^η_b$ should be much larger since there are many more latent variables, and their gradients are easier to evaluate.
 #
 # - For the latent updates, the gradients on the earliest and latest batches are extended up to the edges of the data segment. This is to avoid effects where edges are left un-updated; points are undersampled around edges, and in particular, the last $Kηr$ time points would otherwise never be updated. Moreover, the initial condition has a disproportionate impact on the initial dynamics, so it makes sense to ensure it is updated on every pass.
 #
-# - A momentum-based update for latents is unlikely to work, since on each batch we update different latent variables.  
+# - A momentum-based update for latents is unlikely to work, since on each batch we update different latent variables.
 # :::
 #
 # ::::

@@ -6,8 +6,8 @@ src
 *cache*
 
 _build
+/envs
 /data
-  # Don't version control data
 /index.html
   # Allow placing a symlink to the generated html book without bothering git
 

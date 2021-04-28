@@ -59,6 +59,7 @@ eval "$(conda shell.bash hook)"
 # Here we set it to the name of the directory containing this file,
 # in lowercase for easier typing.
 # If the parent's name is 'code', the name of its parent is used instead.
+# TODO: Drop certain chars, like '-'. Would be much easier in Python…
 namedir=$DIR
 if [ ! $ENVNAME ]; then  # Skip if ENVNAME is hard-coded in script
     ENVNAME=`basename "$namedir"`

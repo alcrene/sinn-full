@@ -8,9 +8,9 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.9.1
 #   kernelspec:
-#     display_name: Python (sinnfull)
+#     display_name: Python (sinn-full)
 #     language: python
-#     name: sinnfull
+#     name: sinn-full
 # ---
 
 # %% [markdown]
@@ -53,10 +53,10 @@ if __name__ == "__main__":
     from sinnfull import ureg
     from sinnfull.parameters import ParameterSet
     from sinnfull.models import OUInput, TimeAxis
-    from sinnfull.data_objects import DataAccessor
+    from sinnfull.data import DataAccessor
     #from sinnfull.sampling import sample_baseline_segment
     from sinnfull.rng import get_fit_rng, get_sim_rng
-    from sinnfull.optimization import Recorder
+    from sinnfull.optim import Recorder
     from mackelab_toolbox.optimizers import Adam
 
 

@@ -10,8 +10,8 @@ from mackelab_toolbox.cgshim import typing as mtbtyping
 import mackelab_toolbox.serialize as mtbserialize
 import smttask.typing
 
-from .data_objects import DataAccessor
-# from .models.objective_types import ObjectiveFunction
+from .data import DataAccessor
+# from .models.base import ObjectiveFunction
 
 # Serialization of functions
 mtbserialize.config.trust_all_inputs = True

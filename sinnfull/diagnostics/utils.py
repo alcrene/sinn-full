@@ -82,7 +82,7 @@ class RecordData:
 
         ## Inspection of gradients ##
         global full_gradη, sliced_gradη
-        full_gradη, sliced_gradη = sinnfull.optimization.get_gradη(
+        full_gradη, sliced_gradη = sinnfull.optim.get_gradη(
             optimizer, upd_type='default', wrt_hist=getattr(optimizer.model,ηhist),
             full_gradη=True, sliced_gradη=True)
         self.full_gradη = full_gradη
@@ -243,7 +243,7 @@ def parse_theano_print_output(s, filter_str=None):
 
 from typing import Union, Optional, List
 from dataclasses import dataclass
-from sinnfull.optimization import DiagnosticRecorder
+from sinnfull.optim import DiagnosticRecorder
 
 @dataclass
 class single_update_record_condition:

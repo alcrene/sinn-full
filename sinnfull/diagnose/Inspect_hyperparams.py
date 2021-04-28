@@ -33,8 +33,8 @@
 # %%
 import sinnfull
 sinnfull.setup('theano')
-import sinnfull.optimization
-sinnfull.optimization.diagnostic_hooks = True
+import sinnfull.optim
+sinnfull.optim.diagnostic_hooks = True
 import sinn
 sinn.config.trust_all_inputs = True  # Allow deserialization of arbitrary function
 import smttask
@@ -62,7 +62,7 @@ from sinnfull.diagnostics.utils import load_record, set_to_step, set_to_zero
 sinnfull.diagnostics.enable()
 
 # %%
-from sinnfull.optimization.recorders import LogpRecorder, ΘRecorder
+from sinnfull.optim.recorders import LogpRecorder, ΘRecorder
 
 # %% [markdown]
 # ---
@@ -185,7 +185,7 @@ fig.suptitle("Fit dynamics");
 
 # %%
 from sinnfull.diagnostics.utils import partial_logps_recorder
-from sinnfull.optimization.recorders import logL_recorder
+from sinnfull.optim.recorders import logL_recorder
 
 # %%
 Kηb = shim.eval(optimizer.Kηb)

@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 # %% [markdown]
 # # Convergence tests
 #
-# Convergence testing functions are boolean functions that return *True* if an optimization problem has converged, or partially converged (e.g. latents may converge before parameters). Based on the current values in one or multiple *Recorders* instances, they return one of the values defined by `~sinnfull.optimization.OptimizerStatus`. The `~sinnfull.optimization.Optimizer` is expected to use this value to update its status.
+# Convergence testing functions are boolean functions that return *True* if an optimization problem has converged, or partially converged (e.g. latents may converge before parameters). Based on the current values in one or multiple *Recorders* instances, they return one of the values defined by `~sinnfull.optim.OptimizerStatus`. The `~sinnfull.optim.Optimizer` is expected to use this value to update its status.
 #
 # All convergence tests take a single argument: `optimizer`.
 #
@@ -44,8 +44,8 @@ from pydantic import BaseModel, conint, PositiveFloat
 from sinn.utils.pydantic import initializer
 
 # %%
-from sinnfull.optimization.common import OptimizerStatus
-from sinnfull.optimization.recorders import Recorder
+from sinnfull.optim.common import OptimizerStatus
+from sinnfull.optim.recorders import Recorder
 
 
 # %% [markdown]
@@ -100,7 +100,7 @@ class ConvergenceTest(BaseModel):
 #
 # Recorders:
 #
-# - Cost recorder (e.g. `~sinnfull.optimization.recorders.LogpRecorder`)
+# - Cost recorder (e.g. `~sinnfull.optim.recorders.LogpRecorder`)
 
 # %%
 class DivergingCost(ConvergenceTest):
@@ -109,7 +109,7 @@ class DivergingCost(ConvergenceTest):
     ----------
     cost_recorder:
         Recorder for a scalar cost.
-        Example: `~sinnfull.optimization.recorders.LogpRecorder`
+        Example: `~sinnfull.optim.recorders.LogpRecorder`
     maximize:
         Whether the optimizer tries to maximize or minimize the cost value.
         True=maximize, False=minimize.
@@ -160,7 +160,7 @@ ConvergenceTest._class_registry['DivergingCost'] = DivergingCost
 #
 # Recorders:
 #
-# - Cost recorder (e.g. `~sinnfull.optimization.recorders.LogpRecorder`)
+# - Cost recorder (e.g. `~sinnfull.optim.recorders.LogpRecorder`)
 #
 # Parameters:
 #
@@ -180,7 +180,7 @@ class ConstantCost(ConvergenceTest):
     ----------
     cost_recorder: recorder name (str)
         Recorder for a scalar cost.
-        Example: `~sinnfull.optimization.recorders.LogpRecorder`
+        Example: `~sinnfull.optim.recorders.LogpRecorder`
     tol: float > 0
         Cost values differing by a value less than `tol` are considered
         “equal” for the purpose of testing convergence.

@@ -102,9 +102,9 @@ from smttask.view import RecordView
 from sinn import Model
 from sinn.utils.pydantic import initializer
 from sinnfull.models import Prior
-from sinnfull.data_objects import DataAccessor
-from sinnfull.optimization import Recorder
-from sinnfull.optimization.recorders import ΘRecorder
+from sinnfull.data import DataAccessor
+from sinnfull.optim import Recorder
+from sinnfull.optim.recorders import ΘRecorder
     # Only used as read-only container for backward transformed params
     # Using a bare Recorder segfaults
 
@@ -1620,7 +1620,7 @@ class RSView(smttask.RecordStoreView):
 
             df = pd.DataFrame(
                   data,
-                  columns=pd.Index(data.keys(), name='record label IIIIII'),
+                  columns=pd.Index(data.keys(), name='record label'),
                   index=pd.MultiIndex.from_tuples(next(iter(data.values())).keys())
                 ).T.sort_values([('loss', 'max logL')], ascending=False)
 

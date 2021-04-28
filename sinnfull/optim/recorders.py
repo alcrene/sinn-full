@@ -97,7 +97,7 @@ from sinn.utils.pydantic import initializer
 
 # %% tags=["hide-input"]
 import sinnfull
-from sinnfull.optimization.common import Optimizer
+from sinnfull.optim.base import Optimizer
 
 # %% [markdown]
 # ## Definition: `Recorder` object
@@ -709,7 +709,7 @@ if __name__ == "__main__":
 
 # %%
 if __name__ == "__main__":
-    from sinnfull.optimization.recorders import (  # Use imported recorders so they are deserializable
+    from sinnfull.optim.recorders import (  # Use imported recorders so they are deserializable
         Recorder as Lib_Recorder, LogpRecorder as Lib_LogpRecorder)
 
     optim = DummyOptimizer()

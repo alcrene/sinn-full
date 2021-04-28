@@ -8,9 +8,9 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (sinnfull)
+#     display_name: Python (sinn-full)
 #     language: python
-#     name: sinnfull
+#     name: sinn-full
 # ---
 
 # %% [markdown]
@@ -23,11 +23,19 @@ from __future__ import annotations
 import abc
 from collections import namedtuple
 from types import SimpleNamespace
+from typing import Optional, Union, List, Callable
 from enum import Flag
-from pydantic import BaseModel
+from numbers import Integral
+from pydantic import BaseModel, validator, root_validator
 
-from mackelab_toolbox.typing import Array
-from sinn.models import ModelParams
+from mackelab_toolbox.typing import Array, FloatX, RNGenerator
+from sinn.histories import History
+from sinn.models import ModelParams, initializer
+
+from sinnfull._json_encoders import json_encoders
+from sinnfull.parameters import ParameterSet
+from sinnfull.models import Model
+from sinnfull.sampling import SegmentSampler
 
 # %%
 __all__ = ["Optimizer", "OptimParams", "OptimizerStatus"]
@@ -49,9 +57,69 @@ __all__ = ["Optimizer", "OptimParams", "OptimizerStatus"]
 #
 # Parameters provided to an optimizer must correspond to the [_optimization space_](prior-types-and-spaces) (as opposed to the _model space_). The provided `OptimParams` allows to indicate this semantically, but it is up to you to provide the correct parameters.
 #
-# :::{Note}  
-# To avoid priors being over weighted, they are scaled by $\frac{K_b}{K}$, where $K_b$ is the length of a batch and $K$ is the total number of data points in a segments.  
+# :::{Note}
+# To avoid priors being over weighted, they are scaled by $\frac{K_b}{K}$, where $K_b$ is the length of a batch and $K$ is the total number of data points in a segments.
 # :::
+
+# %% [markdown]
+# ## Definition: `OptimizerStatus`
+#
+# Optimizers may involve several sub optimization problems, most notably optimization of the parameters and the latents. Storing their state as a bit flag allows to represent any convergence state; each bit corresponds to one subproblem, and is switched to 1 when that subproblem has converged. When all bits are 1, the optimizer has converged fully.
+#
+# The special value -1 is used to indicate a failure which causes termination of the optimization.
+#
+# | Status flag | Name | Meaning |
+# |------------:|------|---------|
+# |  00         | `NotConverged` | Nothing has converged |
+# |  01         | `ParamsConverged` | Parameter optimization has converged |
+# |  10         | `LatentsConverged` | Latents optimization has converged |
+# |  11         | `Converged` | Fully converged |
+# | -1 = …1111  | `Failed` | Failed |
+#
+# Updating the convergence status is done by *bitwise OR* operations. For example, to indicate that the optimization of parameters has converged, one does
+#
+#     status |= OptimizerStatus.ParamsConverged
+#
+# Repeating a bitwise or with the same argument does not further change the value of `status`.
+# Furthermore, the `Failed` status cannot be changed by bitwise OR operations. Thus it is always safe to update the status as above, independent of its current value.
+#
+# To check for convergence, use the *bitwise AND*. For example, the following will skip an optimization step if `status` is `Failed` or `Converged`:
+#
+#     if not (status & OptimizerStatus.Converged) is OptimizerStatus.Converged:
+#         # do optimize step
+#
+# For single-bit values, the identity comparison can be dropped:
+#
+#     if not (status & OptimizerStatus.ParamsConverged):
+#         # do optimize step
+#
+# The `status` variable is checked by `step()` to skip updates for already converged sub-problems. Thus it can be used as a signal to terminate a fit. Since it is a public attribute, it's value can also be checked to determine whether to call `step()` at all.
+
+# %%
+class OptimizerStatus(Flag):
+    NotConverged     = 0
+    ParamsConverged  = 1
+    LatentsConverged = 2
+    Converged        = 3  # Sum of all partial convergence statuses
+    # There can only be one failed state: usage relies on the bit
+    # representation of -1 being all 1's, and thus masking any OR-ed value
+    Failed           = -1
+
+
+# %% [markdown]
+# ### Example
+
+# %% tags=["hide-input"]
+if __name__ == "__main__":
+    # Set the status
+    status = OptimizerStatus.NotConverged
+    status |= OptimizerStatus.ParamsConverged
+    assert status is OptimizerStatus.ParamsConverged
+    assert (status | OptimizerStatus.ParamsConverged) is OptimizerStatus.ParamsConverged
+    status |= OptimizerStatus.LatentsConverged
+    assert status is OptimizerStatus.Converged
+    del status
+
 
 # %% [markdown]
 # ## `Optimizer`
@@ -69,20 +137,20 @@ __all__ = ["Optimizer", "OptimParams", "OptimizerStatus"]
 #
 # These can be retrieved as `optimizer.<attr name>`.
 #
-# `Θ`  
-# ~ OptimParams; set of shared variables in _optimization space_.  
+# `Θ`
+# ~ OptimParams; set of shared variables in _optimization space_.
 # ~ Use the `init_params` argument to set it
 #
-# `fit_hyperparams`  
+# `fit_hyperparams`
 # ~ nested dict
 #
-# `observed_hists`  
+# `observed_hists`
 # ~ Set of `History` instances for which we have data.
 #
-# `latent_hists`  
+# `latent_hists`
 # ~ Set of `History` instances we need to infer.
 #
-# `stepi`  
+# `stepi`
 # ~ Number of optimization steps already performed
 
 # %% [markdown]
@@ -90,39 +158,38 @@ __all__ = ["Optimizer", "OptimParams", "OptimizerStatus"]
 
 # %%
 class Optimizer(BaseModel, abc.ABC):
-    
-    model              : sinn.Model
+
+    model              : Model
     rng                : Optional[RNGenerator]=None
     data_segments      : Union[SegmentSampler]
     observed_hists     : List[History]
     latent_hists       : List[History]
     Θ                  : OptimParams   # Set with `init_params` argument
     fit_hyperparams    : ParameterSet
-    update_hyperparams : Optional[Callable[[SGDOptimizer],dict]]
+    update_hyperparams : Optional[Callable[[Optimizer],dict]]
     # Why can't I specify logp types as 'AccumulatedObjectiveFunction' ? When I do, they don’t
     # deserialize, and when I force them to, I get "logp_default is not a valid dict" errors.
     # As if Pydantic thought the specified type was dict ???
     logp_default       : Optional[Callable[[Integral], FloatX]]=None
 
-        
+
     # Managed internally
-    logp                : Optional[Callable]=PrivateAttr(None)
     stepi               : int=0
     orig_fit_hyperparams: ParameterSet=None
     status              : OptimizerStatus=OptimizerStatus.NotConverged
     outcome             : tuple=()
-    
+
     class Config:
         arbitrary_types_allowed=True  # TODO: Remove
         allow_population_by_field_name=True  # When Θ gets exported, accept it as parameter
         fields={'Θ': {'alias': 'init_params'},
                 'logp_default': {'alias': 'logp'},
                 'logp_default_nodyn': {'alias': 'logp_nodyn'}}
-        json_encoders = sinnfull.json_encoders
-        
+        json_encoders = json_encoders
+
     """
     Base class for optimizers.
-    
+
     Parameters
     ----------
     model: sinn.Model
@@ -134,7 +201,7 @@ class Optimizer(BaseModel, abc.ABC):
         with variable names (DataArrays) matching the names of observed histories.
         Any Mapping will work though, so values can also be a plain dictionary of
         {history name: ndarray} pairs.
-        
+
         .. remark:: For convenience in test code, `data_segments` accepts
            arbitrary iterables. However these are not serializable, so when possible
            use `SegmentSampler` objects.
@@ -170,7 +237,7 @@ class Optimizer(BaseModel, abc.ABC):
         These updated values should not be shared variables (they are applied
         with `.set_value()`).
     """
-    
+
     @initializer('observed_hists', 'latent_hists', always=True)
     def wrap_with_list(cls, hists, model):
         """
@@ -188,14 +255,14 @@ class Optimizer(BaseModel, abc.ABC):
                                  f"{[h.name for h in hists if h not in model.history_set]}\n"
                                  "This should not happen.")
         return hists
-    
+
     ## Deserialize functions passed as string
     @validator('update_hyperparams', pre=True)
     def parse_callback_from_str(cls, func):
         if isinstance(func, str):
             func = mtb.serialize.deserialize_function(func)
         return func
-    
+
     # TODO?: Any way to do this with two single-param validator/initializer ?
     #       It would avoid the need for values.get(...) and `if __ is None`
     #       boilerplate.
@@ -218,7 +285,7 @@ class Optimizer(BaseModel, abc.ABC):
         values.update(fit_hyperparams=hyperθ,
                       orig_fit_hyperparams=orighyperθ)
         return values
-    
+
     def copy(self, *args, deep=False, **kwargs):
         """
         Shallow copying an Optimizer is not supported: in the current
@@ -236,13 +303,13 @@ class Optimizer(BaseModel, abc.ABC):
             raise NotImplementedError("Deep copying of {type(self).__name__} "
                                       "is not currently supported.")
         return self
-    
+
     def dict(self, *args, **kwargs):
         """
         When exporting as a dict, replace lists of histories by lists of
         names. This avoids duplicated data, since the histories are already
         part of 'model', and parsing is already taken care of by the validator.
-        
+
         Also, `fit_hyperparams` are often modified during a fit, e.g. to
         scale the learning rate to the stationary variance. In order to
         be able to recreate the same Optimizer from a dict export, we return
@@ -263,9 +330,9 @@ class Optimizer(BaseModel, abc.ABC):
         self.observed_hists = store.observed_hists
         self.latent_hists = store.latent_hists
         return d
-    
+
     ## Abstract methods ##
-    @abstractmethod
+    @abc.abstractmethod
     def draw_data_segment(self):
         """
         Draw the next data segment from `self.data_segment`.
@@ -287,14 +354,14 @@ class Optimizer(BaseModel, abc.ABC):
         """
         # TODO: This could be made optimizer-agnostic, and implemented her
         raise NotImplementError
-        
-    @abstractmethod
+
+    @abc.abstractmethod
     def step(self):
         """
         Update the parameters by performing one optimization step.
-        
+
         **Side-effects**
-        
+
         - Update parameters
         - Update latent histories
         """
@@ -380,66 +447,6 @@ class OptimParams(ModelParams):
                 setattr(self, k, v)
 
 # %% [markdown]
-# ## Definition: `OptimizerStatus`
-#
-# Optimizers may involve several sub optimization problems, most notably optimization of the parameters and the latents. Storing their state as a bit flag allows to represent any convergence state; each bit corresponds to one subproblem, and is switched to 1 when that subproblem has converged. When all bits are 1, the optimizer has converged fully.
-#
-# The special value -1 is used to indicate a failure which causes termination of the optimization.
-#
-# | Status flag | Name | Meaning |
-# |------------:|------|---------|
-# |  00         | `NotConverged` | Nothing has converged |
-# |  01         | `ParamsConverged` | Parameter optimization has converged |
-# |  10         | `LatentsConverged` | Latents optimization has converged |
-# |  11         | `Converged` | Fully converged |
-# | -1 = …1111  | `Failed` | Failed |
-#
-# Updating the convergence status is done by *bitwise OR* operations. For example, to indicate that the optimization of parameters has converged, one does
-#
-#     status |= OptimizerStatus.ParamsConverged
-#
-# Repeating a bitwise or with the same argument does not further change the value of `status`.
-# Furthermore, the `Failed` status cannot be changed by bitwise OR operations. Thus it is always safe to update the status as above, independent of its current value.
-#
-# To check for convergence, use the *bitwise AND*. For example, the following will skip an optimization step if `status` is `Failed` or `Converged`:
-#
-#     if not (status & OptimizerStatus.Converged) is OptimizerStatus.Converged:
-#         # do optimize step
-#
-# For single-bit values, the identity comparison can be dropped:
-#
-#     if not (status & OptimizerStatus.ParamsConverged):
-#         # do optimize step
-#
-# The `status` variable is checked by `step()` to skip updates for already converged sub-problems. Thus it can be used as a signal to terminate a fit. Since it is a public attribute, it's value can also be checked to determine whether to call `step()` at all.
-
-# %%
-class OptimizerStatus(Flag):
-    NotConverged     = 0
-    ParamsConverged  = 1
-    LatentsConverged = 2
-    Converged        = 3  # Sum of all partial convergence statuses
-    # There can only be one failed state: usage relies on the bit
-    # representation of -1 being all 1's, and thus masking any OR-ed value
-    Failed           = -1
-
-
-# %% [markdown]
-# ### Example
-
-# %% tags=["hide-input"]
-if __name__ == "__main__":
-    # Set the status
-    status = OptimizerStatus.NotConverged
-    status |= OptimizerStatus.ParamsConverged
-    assert status is OptimizerStatus.ParamsConverged
-    assert (status | OptimizerStatus.ParamsConverged) is OptimizerStatus.ParamsConverged
-    status |= OptimizerStatus.LatentsConverged
-    assert status is OptimizerStatus.Converged
-    del status
-
-
-# %% [markdown]
 # ## Utilities
 
 # %%
@@ -456,3 +463,10 @@ def clip_gradients(gradients: List["SymbolicExpression"], clip: float):
     # rescale = shim.print(rescale) # DEBUG
     gradients = [g/rescale for g in gradients]
     return gradients
+
+
+# %% [markdown] tags=["remove-cell"]
+# ## Wrap-up
+
+# %% tags=["remove-cell"]
+Optimizer.update_forward_refs()

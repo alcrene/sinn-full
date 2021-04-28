@@ -34,6 +34,7 @@ else:
     from copy import deepcopy
     from typing import Tuple
     from functools import reduce
+    from pathlib import Path
     import numpy as np
     import pint
     import mackelab_toolbox.parameters
@@ -158,6 +159,10 @@ else:
 
     class ParameterSet(_parameters.ParameterSet):
         def __init__(self, *args, **kwargs):
+            # Allow initializing with a Path (not just str)
+            if len(args) >= 1 and isinstance(args[0], Path):
+                args = (str(args[0].resolve()), *args[1:])
+            # Run the parent's initializer
             super().__init__(*args, **kwargs)
             # Re-iterate through the dictionary `d`, replacing base `ParameterSet`
             # with our customized `ParameterSet` object.

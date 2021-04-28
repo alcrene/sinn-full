@@ -41,7 +41,7 @@ import sinn
 import abc
 from numbers import Number
 from pydantic import BaseModel, PrivateAttr, validator, root_validator
-from typing import FrozenSet
+# from typing import FrozenSet
 from sinn.utils.pydantic import add_exclude_mask
 from sinn.models import ModelParams
 
@@ -49,17 +49,18 @@ import mackelab_toolbox.typing as mtbtyping
 from mackelab_toolbox.typing import IndexableNamespace, Array, Shared
 from mackelab_toolbox.pymc_typing import PyMC_Model, PyMC_RV
 
+from sinnfull.utils import TypeDict
+from sinnfull.parameters import ParameterSet
 from sinnfull.rng import get_seedsequence
 from sinnfull.tags import TagDecorator
-
-# %%
-tag = TagDecorator('_tags')  # Store tags in a '_tags' attribute
 
 
 # %% [markdown] tags=["remove-cell"]
 # TODO
 # - Remove Prior.logpt_replace
 # - Fix Regularizer to work without this
+# - Also validate tags added to ObjectiveFuncion after instantiation with
+#   the `tag` decorator.
 
 # %% [markdown]
 # ## Param type
@@ -98,19 +99,19 @@ Param=ParamMeta()
 # %% tags=["hide-input"]
 class Model(sinn.Model):
     _compiled_functions: dict=PrivateAttr(default_factory=lambda: {})
-    
+
     @classmethod
     def _stationary_stats(cls, params: ModelParams):
         """
         The model-specific `_stationary_stats` can assume that it always receives
         a ModelParams object (as opposed to a dict or IndexableNamespace)
-        
+
         If expressions for the stationary statistics are not available, this function
         should raise `NotImplementedError`.
         """
         raise NotImplementedError
-        
-        
+
+
     @classmethod
     def stationary_dist(cls, params: ModelParams, seed=None):
         """
@@ -119,7 +120,7 @@ class Model(sinn.Model):
         """
         # Variable names must match those of the histories
         raise NotImplementedError
-    
+
     @classmethod
     def stationary_stats(cls, params: Union[ModelParams, IndexableNamespace, dict],
                          _max_cost: int=10
@@ -147,7 +148,7 @@ class Model(sinn.Model):
         if not symbolic_params:
             stats = shim.eval(stats)
         return stats
-    
+
     def stationary_stats_eval(self):
         """
         Equivalent to `self.stationary_stats(self.params).eval()`, with the
@@ -202,12 +203,12 @@ class Model(sinn.Model):
 #
 # [^1]: For more complex masks (e.g. only a subset of components in a connectivity matrix), one should be able to define the unmasked components as a lower-dimensional variable and then construct the full variable with concatenation and reshaping operations. However this has not been tested.
 #
-# :::{note}  
-# Since `Prior` instances are meant to represent model priors, they must not define [observed](https://docs.pymc.io/pymc-examples/examples/pymc3_howto/api_quickstart.html#Observed-Random-Variables) variables.  
+# :::{note}
+# Since `Prior` instances are meant to represent model priors, they must not define [observed](https://docs.pymc.io/pymc-examples/examples/pymc3_howto/api_quickstart.html#Observed-Random-Variables) variables.
 # :::
 #
-# :::{important}  
-# Prior variables are mapped model parameters based on their name. So if your model defines a parameter “alpha”, your prior _must_ define a variable named “alpha”. It can, however, by defined as constant or via a deterministic transformation of other variables.  
+# :::{important}
+# Prior variables are mapped model parameters based on their name. So if your model defines a parameter “alpha”, your prior _must_ define a variable named “alpha”. It can, however, by defined as constant or via a deterministic transformation of other variables.
 # :::
 
 # %% [markdown]
@@ -215,21 +216,21 @@ class Model(sinn.Model):
 # ### Parameter spaces
 
 # %% [markdown]
-# (prior-types-and-spaces)=  
+# (prior-types-and-spaces)=
 # :::{sidebar} RV types
 #
 # Random variables (RVs) in a prior can be of four PyMC3 types: `Constant`, `FreeRV`, `TransformedRV` or `Deterministic`, with each `TransformedRV` is associated to a `FreeRV` via a bijection.
 #
-# Optimization space  
-# ~ contains instances of `FreeRV`.  
+# Optimization space
+# ~ contains instances of `FreeRV`.
 # ~ Represented by `~sinnfull.optim.base.OptimParams`.
 #
-# Prior space  
+# Prior space
 # ~ contains instances of `FreeRV`, `Constant` and `TransformedRV`.
 #
-# Model space  
-# ~ contains instances of `Constant`, `Constant`, `FreeRV`, `TransformedRV` and `Deterministic`.  
-# ~ Represented by `~sinn.models.ModelParams`.  
+# Model space
+# ~ contains instances of `Constant`, `Constant`, `FreeRV`, `TransformedRV` and `Deterministic`.
+# ~ Represented by `~sinn.models.ModelParams`.
 # :::
 
 # %% [markdown]
@@ -607,6 +608,10 @@ class Prior(PyMC_Model):
 #   already stored, and could differ from those in the decorator?)
 # SOLUTION/HACK: Create a new PureFunction type, which wraps the json_encoder
 #   for PureFunction with another which removes lines starting with '@ObjectiveFunction'.
+# AND YET: Now that tags are stored with `set` instead of `frozenset`, adding
+#   tags should be harmless (unless they are dynamically removed).
+#   Keeping the hack for now since it works and I don't care to work out
+#   the magic done by ObjectiveFunction.__new__.
 
 # %% [markdown]
 # (objective-functions)=
@@ -616,9 +621,9 @@ class Prior(PyMC_Model):
 #
 # We consider two types of objective functions:
 #
-# - _Accumulated_ objective functions, which additionally take a time point $t$: `l(model, t)`.  
+# - _Accumulated_ objective functions, which additionally take a time point $t$: `l(model, t)`.
 #   These are meant to be evaluated at multiple time points, and their results summed (accumulated).
-# - _Regularizers_, which take no extra arguments: `l(model)`.  
+# - _Regularizers_, which take no extra arguments: `l(model)`.
 #   For parameters, this is functionally equivalent to defining `Prior`.
 #
 # Since we don't currently implement regularizers, they are not discussed further.
@@ -654,7 +659,7 @@ class Prior(PyMC_Model):
 #
 # Although any string can be used as a tag, objective functions currently ascribed additional meaning to specific strings. This is used to inform users on the intended use of a function as well provide validation – for example, preventing both `forward` and `backward` tags from being used simultaneously.
 #
-# :::{admonition} Partly historical note  
+# :::{admonition} Partly historical note
 # :class: dropdown
 #
 # The list below describes the tags that were at some point defined, and which are still recognized by `ObjectiveFunction`. Since their expected usefulness has faded compared to previous iterations of the framework, their future is uncertain.
@@ -730,7 +735,7 @@ class ObjectiveFunction(BaseModel, abc.ABC):
     A wrapper around objective functions, allowing serialization and
     basic arithmetic operations (provided by smttask.PureFunction).
     Allows additional metadata to be attached in the form of tags, which
-    functions like `~sinnfull.optimization.SGDOptimizer` may use to determine
+    functions like `~sinnfull.optim.SGDOptimizer` may use to determine
     how to use the function, or simply validate that it is of an expected type.
 
     Use as a decorator, or instantiate with a function argument.
@@ -756,16 +761,8 @@ class ObjectiveFunction(BaseModel, abc.ABC):
     >>> h(model, tidx)
     """
     func: PureFunctionObjective
-    tags: FrozenSet[str]=frozenset()
-    # Attempting to use a tag not listed in `allowed_tags` will raise an error.
-    # `disallowed_tags` is technically redundant (one can simply not list
-    # a tag in `allowed_tags`) but it makes the restriction much clearer when
-    # reading code and avoids the need to repeat allowed_tags in subclasses
-    # since `disallowed_tags` is given precedence.
-    allowed_tags: ClassVar[set] = {'forward', 'backward', 'nodyn',
-                                    'global', 'regularizer',
-                                    'se', 'squared-error', 'l1',
-                                    'log L'}
+    tags: Set[str]=set()
+    # Attempting to use a tag listed in `disallowed_tags` will raise an error.
     disallowed_tags: ClassVar[set] = set()
     exclusive_tags: ClassVar[List[set]] = [
         {'forward', 'global'},
@@ -839,20 +836,12 @@ class ObjectiveFunction(BaseModel, abc.ABC):
 
     @validator('tags')
     def validate_tags(cls, tags):
-        ## Validate the class' tag spec (could be done in __init_subclass__)
-        cls.allowed_tags -= cls.disallowed_tags
-            # raise ValueError("Tags cannot be both allowed and disallowed. "
-            #                  f"Offending tags: {cls.allowed_tags & cls.disallowed_tags}")
-        ## Validate against allowed_tags
+        ## Validate against disallowed_tags
         if not tags:
-            return frozenset()
+            return set()
         if tags & cls.disallowed_tags:
             raise ValueError(f"The following tags are disallowed for {cls}: "
                              f"{tags & cls.disallowed_tags}")
-        if tags - cls.allowed_tags:
-            raise ValueError("The following tags are unrecognized: "
-                             f"{tags - cls.allowed_tags}.\n"
-                             f"Valid tags are: {cls.allowed_tags}.")
         for excl_combo in cls.exclusive_tags:
             if len(tags & excl_combo) > 1:
                 raise ValueError("The following tags are mutually exclusive; "
@@ -878,7 +867,7 @@ class ObjectiveFunction(BaseModel, abc.ABC):
             normalized_tags = {syn_subs.get(tag, tag) for tag in tags}
         tags = normalized_tags
 
-        return frozenset(tags)
+        return set(tags)
 
     ## Function arithmetic ##
     # REMARK: sinn.Model.accumulate inspects the signature of the composite
@@ -1035,3 +1024,22 @@ class Regularizer(ObjectiveFunction):
 ObjectiveFunction.update_forward_refs()
 AccumulatedObjectiveFunction.update_forward_refs()
 Regularizer.update_forward_refs()
+
+# %% [markdown]
+# ## Tagging
+
+# %%
+
+# `tag` is used to store tags in a '_tags' attribute
+# It can be used as either a function or decorator
+
+# NB: We need to support for both '_tags' and 'tags' attributes, since
+#     Objectives use the latter. (The reason being that their tags are public
+#     attributes)
+
+tag = TagDecorator(TypeDict({
+    Model: '_tags',
+    ObjectiveFunction: 'tags',
+    ParameterSet: '_tags',
+    Callable: '_tags',  # Must come last, since it's the most generic
+    }))

@@ -18,16 +18,17 @@ Models are composed of three types of objects:
   - Equated to the log probability of the parameters given the observations.  
     Accordingly, the combination with the prior is simply `objective + prior.logp`.
 
+(model-organization)=
 ## Organization
 
 Since priors and objectives defined for one model are unlikely to work for another, they are defined alongside models in subdirectories (e.g. [Ornstein-Uhlenbeck](./OU/OU), [Ricker](./Ricker/Ricker), [Wilson-Cowan](./WC/WC)). The base classes are defined in [base.py](./base.py).
 
-`sinn.models` defines four global collections:
+`sinnfull.models` defines four global collections:
 
-- `sinn.models.models`
-- `sinn.models.paramsets`
-- `sinn.models.priors`
-- `sinn.models.objectives`
+- `sinnfull.models.models`
+- `sinnfull.models.paramsets`
+- `sinnfull.models.priors`
+- `sinnfull.models.objectives`
 
 These are populated automatically by scanning subdirectories, and can be filtered by tags (see [below](#taming-model-proliferation-with-tags)), which makes it easier to discover which definitions are available. Objects in these collections always have at least one tag, namely the name of the model they are associated with (inferred from the directory name).
 
@@ -77,6 +78,8 @@ And the following would return a dictionary with all parameter sets, organized b
 ```python
 paramsets.by_tag()
 ```
+
+See also the [example notebook](./test_model_collections).
 
 ### Automatically assigned tags
 

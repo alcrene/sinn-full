@@ -138,7 +138,7 @@ def setup(cglib: str='numpy', view_only: bool=False):
     json_encoders = sinnfull._json_encoders.json_encoders
 
     ## Add sinnfull result types to smttask.view functions ##
-    from .optimization import Recorder
+    from .optim import Recorder
     smttask.view.config.data_models.extend([Recorder])
 
     ## Deactivate recording if `view_only` is True ##

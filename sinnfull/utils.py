@@ -114,6 +114,26 @@ import mackelab_toolbox.utils
 
 # %% [markdown]
 # ---------------
+# ## Mapping types
+
+# %%
+class TypeDict(dict):
+    """
+    A dict for types. Keys match **any subclass**.
+
+    TODO?: Allow to sort keys from most to least specific.
+    """
+    def __getitem__(self, key):
+        if not isinstance(key, type):
+            key = type(key)
+        for T, v in self.items():
+            if isinstance(T, type) and issubclass(key, T):
+                return v
+        # Raise an understandable KeyError
+        return super().__getitem__(key)
+
+# %% [markdown]
+# ---------------
 # ## For interactive use / output management
 
 # %%
@@ -382,7 +402,6 @@ import tempfile
 from pathlib import Path
 import smttask
 from mackelab_toolbox.pymc_typing import PyMC_Model
-from sinnfull.models.objective_types import ObjectiveFunction
 
 # %%
 import json

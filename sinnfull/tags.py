@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 from collections.abc import Iterable
-from typing import Dict
+from typing import Union, Dict
 
 class TaggedCollection(list):
     tags: set
@@ -81,7 +81,7 @@ class TaggedCollection(list):
         self._squeeze = squeeze
 
     def __str__(self):
-        return f"TaggedCollection<{len(self) items}, tags={self.tags}>"
+        return f"TaggedCollection<{len(self)} items, tags={self.tags}>"
     def by_tag(self) -> Dict[frozenset, list]:
         tag_sets = {}
         for obj, tags in self:
@@ -103,18 +103,37 @@ class TaggedCollection(list):
             filter_tags = {tag}
         remove_set = filter_tags if remove else {}
         return TaggedCollection((x, tags-remove_set) for x, tags in self
-                                if not filter_tags - tags)
+                                if filter_tags <= tags)
+    def filter_not(self, tag):
+        """
+        Return a TaggedCollection containing only the values NOT matching the
+        provided tag(s).
+        If `tag` is a `set`, it should contain multiple tags. None of them must
+        match for an element to be kept by the filter.
+        """
+        if isinstance(tag, set):
+            filter_tags = tag
+        else:
+            filter_tags = {tag}
+        return TaggedCollection((x, tags) for x, tags in self
+                                if filter_tags.isdisjoint(tags))
+
     def _apply_squeeze(self, result):
         if self._squeeze and len(result) == 1:
             res = result[0]
-            # Attach the remaining tags to the result, so that overspecifying
-            # tags does not cause an error.
+            # HACK - Attach the remaining tags to the result, so that
+            # overspecifying tags does not cause an error.
             # Attributes simply point back to the object, so that indexing
             # redundant tags is a noop
             if result.tags:
                 for tag in result.tags:
                     if not hasattr(res, tag):  # Don't overwrite existing attributes
-                        setattr(res, tag, res)
+                        try:
+                            setattr(res, tag, res)
+                        except Exception:
+                            # This is just a hacky convenience.
+                            # If it fails for any reason, continue.
+                            continue
             return res
         elif self._squeeze and len(result.tags) == 0:
             return result.values
@@ -135,12 +154,24 @@ class TaggedCollection(list):
           * Index (key is int or slice)
             -> return an element (int) or list (slice)
         """
+        # Allow passing multiple tags as comma separated list
+        if isinstance(key, tuple):
+            key = set(key)
         if isinstance(key, str):
-            if key not in self.tags:
+            if key in self.tags:
+                return self._apply_squeeze(self.filter(key, remove=True))
+            elif key[1:] in self.tags:
+                mod, key = key[0], key[1:]
+                if mod == "!":
+                    return self._apply_squeeze(self.filter_not(key))
+                else:
+                    raise ValueError(f"'{mod}' is not a recognized tag "
+                                     "modifier. Possible values: !.")
+            else:
                 raise KeyError(f"'{key}' does not match any tags. "
                                f"Possible tags: {self.tags}.")
-            return self._apply_squeeze(self.filter(key, remove=True))
         elif isinstance(key, set):
+            # TODO: Support multiple negation filters
             if key - self.tags:
                 raise KeyError("The following values don't match any tags: "
                                f"{key-self.tags}.\nPossible tags: {self.tags}.")
@@ -156,20 +187,25 @@ class TaggedCollection(list):
         return key in self.values
 
 class TagDecorator:
-    def __init__(self, attribute_name='_tags'):
+    def __init__(self, attribute_name: Union[str,Dict[type,str]]='_tags'):
         """
         :param:attribute_name: The attribute name used to attach tags.
+            Can also be a dictionary, mapping types to strings.
+            The `sinnfull.utils.TypeDict` is meant for this purpose.
         """
         self.attr_name = attribute_name
     def __call__(self, *tags):
         def decorator(obj):
-            tag_attr = getattr(obj, self.attr_name, None)
+            attr_name = self.attr_name
+            if isinstance(attr_name, dict):
+                attr_name = attr_name[obj]
+            tag_attr = getattr(obj, attr_name, None)
             if tag_attr is None:
-                setattr(obj, self.attr_name, set())
-                tag_attr = getattr(obj, self.attr_name)
+                setattr(obj, attr_name, set())
+                tag_attr = getattr(obj, attr_name)
             elif not isinstance(tag_attr, set):
                 raise RuntimeError(f"Object {obj} already has an attribute "
-                                   f"named '{self.attr_name}'. Cannot use that "
+                                   f"named '{attr_name}'. Cannot use that "
                                    "name to store tags.")
             tag_attr.update(tags)
             return obj

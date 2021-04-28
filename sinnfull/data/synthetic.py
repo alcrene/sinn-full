@@ -61,7 +61,7 @@ import theano_shim as shim
 from typing import Sequence, Iterable
 from mackelab_toolbox.typing import json_like
 from sinn.models import Model, ModelParams
-from sinnfull.data_objects.base import DataAccessor as BaseAccessor, Trial as BaseTrial
+from sinnfull.data.base import DataAccessor as BaseAccessor, Trial as BaseTrial
 import sinnfull.utils as utils
 
 class Trial(BaseTrial):

@@ -10,9 +10,9 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (sinn-full)
+#     display_name: Python (sinnfull)
 #     language: python
-#     name: sinn-full
+#     name: sinnfull
 # ---
 
 # %% [markdown]

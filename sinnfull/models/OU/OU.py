@@ -9,9 +9,9 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (sinnfull)
+#     display_name: Python (sinn-full)
 #     language: python
-#     name: sinnfull
+#     name: sinn-full
 # ---
 
 # %% [markdown]
@@ -29,14 +29,22 @@ if __name__ == "__main__":
 from typing import Any, Optional, Union
 import numpy as np
 import pymc3 as pm
+from pydantic import validator
 import theano_shim as shim
 from mackelab_toolbox.typing import Array, FloatX, Shared, Tensor, AnyRNG, IndexableNamespace
+
 from sinn.models import  ModelParams, updatefunction, initializer
 from sinn.histories import TimeAxis, Series, AutoHist
 from sinn.utils import unlocked_hists
 
 from sinnfull.utils import add_to, add_property_to
 from sinnfull.models.base import Model, Param, tag
+
+# %%
+from sinn.histories import Spiketrain
+
+# %%
+Spiketrain.__hash__
 
 # %%
 __all__ = ['OU_AR', 'OU_finite_noise']
@@ -74,6 +82,11 @@ __all__ = ['OU_AR', 'OU_finite_noise']
 # \tilde{I}_k &\sim \mathcal{N}\biggl( \tilde{I}_{k-1} - \frac{\tilde{I}_{k-1} - \tilde{\mu}}{\exp(\log \tilde{\tau})} \Delta t,\; 2 \exp(\log \tilde{\sigma})^2 \Delta t \biggr) \\
 # I_k &= \tilde{W} \tilde{I}_k
 # \end{align}
+#
+# :::{margin} Code  
+# `OU_AR`: Parameters  
+# `OU_AR`: Dynamical equations  
+# :::
 
 # %% tags=["hide-input"]
 class OU_AR(Model):
@@ -82,10 +95,10 @@ class OU_AR(Model):
     ## Parameters ##
     class Parameters(ModelParams):
         μtilde :Shared[FloatX,1]
-        τtilde :Shared[FloatX,1]
-        σtilde :Shared[FloatX,1]
+        logτtilde :Shared[FloatX,1]
+        logσtilde :Shared[FloatX,1]
         Wtilde :Shared[FloatX,2]
-        Atilde :Param[np.int16,1]
+        Atilde :Param[np.int16,2]
         M      :Union[int,Array[np.integer,0]]
         Mtilde :Union[int,Array[np.integer,0]]
         @property
@@ -104,12 +117,14 @@ class OU_AR(Model):
     Itilde :Series=None
     rng    :AnyRNG
 
-    # State = the histories required to make dynamics markovian
+    # State = the histories required to make dynamics Markovian
     class State:
         Itilde :Any  # The type is unimportant, so use Any
 
     ## Initialization ##
     # Allocate arrays for dynamic variables, and add padding for initial conditions
+    # NB: @initializer methods are only used as defaults: if an argument is
+    #     explicitely given to the model, its method is NOT executed at all.
     @initializer('Itilde')
     def Itilde_init(cls, Itilde, time, Mtilde):
         return Series(name="Itilde", time=time, shape=(Mtilde,),
@@ -174,8 +189,13 @@ class OU_AR(Model):
 # \end{align}
 #
 # Here $\odot$ denotes the Hadamard product.
+#
+# :::{margin} Code  
+# `OU_AR`: Stationary distribution  
+# :::
 
     # %% tags=["hide-input"]
+    @add_to('OU_AR')
     @classmethod
     def _stationary_stats(cls, params: ModelParams):
         return {'Itilde': {'avg': params.μtilde, 'std': params.σtilde*shim.sqrt(params.τtilde)}}
@@ -246,6 +266,10 @@ class OU_AR(Model):
 #      \tilde{σ}^1 \geq \tilde{σ}^2 \geq \dotsb \geq \tilde{σ}^{\tilde{M}}
 #    \end{equation}
 #    Note that the likelihood remains smooth in the parameters despite the additional permutation.
+#    
+# :::{margin} Code  
+# `OU_AR`: Degenaracy removal  
+# :::
 
     # %% tags=["hide-input"]
     @add_to('OU_AR')
@@ -324,6 +348,10 @@ class OU_AR(Model):
 
 # %% [markdown]
 # It can be useful to also define a `get_test_parameters` method on the class, to run tests without needing to specify a prior.
+#
+# :::{margin} Code  
+# `OU_AR`: Test parameters  
+# :::
 
     # %% tags=["hide-input"]
     @add_to('OU_AR')
@@ -355,38 +383,45 @@ OU_AR.update_forward_refs()  # Always safe to do this & sometimes required
 if __name__ == "__main__":
     time = TimeAxis(min=0, max=1, step=2**-5, unit=sinnfull.ureg.s)
     Θ_OU = OU_AR.Parameters(
-        μtilde=np.float64([2, 0]), τtilde=np.float64([2, 2]), σtilde=np.float64([0.4, 6]),
-        Wtilde=np.float64([[2, 3], [1.6, 2.2]]),
+        μtilde=np.float64([2, 0]),
+        logτtilde=np.float64([1, 1]), logσtilde=np.float64([0.08, 1.1]),
+        Atilde=np.int8([[1, -1],[1, -1]]), Wtilde=np.float64([[2, 3], [1.6, 2.2]]),
         M=2, Mtilde=2
     )
-    model = OU_AR(time=time, params=Θ_OU, rng=shim.config.RandomStreams())
+    model = OU_AR(time=time, params=Θ_OU, rng=shim.config.RandomStream())
     model.integrate('end', histories='all')
-
-    I = model.I.get_trace().copy()
-    Itilde = model.Itilde.get_trace().copy()
+    
+    orig_I = model.I.get_trace().copy()
+    orig_Itilde = model.Itilde.get_trace().copy()
 
     # I = (Atilde * Wtilde) @ Itilde
-    assert np.all(I == np.array([(model.Atilde*model.Wtilde).dot(It)
-                                 for It in Itilde]))
+    assert np.all(orig_I == np.array([(model.Atilde*model.Wtilde) @ It
+                                      for It in orig_Itilde]))
+
+    orig_logσtilde = Θ_OU.logσtilde.copy()
+    assert np.all(model.logσtilde == Θ_OU.logσtilde)
 
     model.remove_degeneracies()
 
     # Parameter values were changed in-place
-    assert np.isclose(model.σtilde, [31.2, 1.44]).all()
+    assert np.all(model.logσtilde == Θ_OU.logσtilde)
+    assert np.all(model.logσtilde != orig_logσtilde)
 
     # Itilde has changed. I has not
-    assert np.all(Itilde != model.Itilde.get_trace())
-    assert np.all(I == model.I.get_trace())
+    assert np.all(orig_Itilde != model.Itilde.get_trace())
+    assert np.all(orig_I == model.I.get_trace())
 
     # We still have I = Wtilde @ Itilde
-    assert np.all(np.isclose(I, np.array([model.Wtilde.dot(It) for It in model.Itilde.get_trace()])))
+    assert np.all(np.isclose(orig_I,
+                             np.array([(model.Atilde*model.Wtilde) @ It
+                                       for It in model.Itilde.get_trace()])))
 
 # %% tags=["hide-cell"]
 if __name__ == "__main__":
     # Use T >= 50
     model.Itilde.data.mean(axis=0)
     model.Itilde.data.std(axis=0)
-    model.stationary_stats()[model.Itilde]
+    model.stationary_stats(model.params)['Itilde']
 
 
 # %% [markdown]
@@ -412,9 +447,14 @@ if __name__ == "__main__":
 #
 # It is possible to avoid redundant definitions by inheriting another model. However rather than inheriting directly, one must do so via a mixin class, as we do below for `OU_FiniteNoise`.  
 # :::
+#
+# :::{margin} Code  
+# `OU_FiniteNoise`: Dynamical equations  
+# :::
 
 # %% tags=["hide-input"]
-class OU_FNMixin(OU_AR1):
+class OU_FNMixin:
+    # Note that the mixin class does NOT inherit from Model
 
     @updatefunction('Itilde', inputs=['Itilde', 'rng'])
     def Itilde_upd(self, tidx):
@@ -433,6 +473,10 @@ class OU_FNMixin(OU_AR1):
 # \mathbb{E}(\tilde{I}_\infty) &= \tilde{\mu} & \mathbb{E}(I_\infty) &= \tilde{A} \tilde{W} \tilde{\mu} \,; \\
 # \mathrm{Var}(\tilde{I}_\infty) &= \tilde{\sigma}^2 & \mathrm{Cov}(I_\infty) &= \tilde{A} \tilde{W} \, \tilde{\sigma}^2 \, \tilde{W}^\T \tilde{A}^\T \,.\\
 # \end{align}
+#
+# :::{margin} Code  
+# `OU_FiniteNoise`: Stationary distribution  
+# :::
 
     # %% tags=["hide-input"]
     @add_to('OU_FNMixin')
@@ -442,7 +486,7 @@ class OU_FNMixin(OU_AR1):
 
 
 # %% tags=["hide-input"]
-class OU_FiniteNoise(OU_FNMixin, OU_AR1):
+class OU_FiniteNoise(OU_FNMixin, OU_AR):
     pass
 
 

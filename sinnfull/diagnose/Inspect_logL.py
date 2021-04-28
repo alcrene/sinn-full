@@ -37,8 +37,8 @@
 # %%
 import sinnfull
 sinnfull.setup('theano')
-import sinnfull.optimization
-sinnfull.optimization.diagnostic_hooks = True
+import sinnfull.optim
+sinnfull.optim.diagnostic_hooks = True
 import sinn
 sinn.config.trust_all_inputs = True  # Allow deserialization of arbitrary function
 import smttask

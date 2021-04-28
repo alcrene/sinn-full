@@ -52,12 +52,12 @@ from mackelab_toolbox.typing import (IndexableNamespace, RNGenerator,
 from sinn.histories import History
 from sinn.models import Model
 
-from sinnfull.optimization import AlternatedOptimizer, Recorder, OptimizerStatus, ConvergenceTest
+from sinnfull.optim import AlternatedOptimizer, Recorder, OptimizerStatus, ConvergenceTest
 from sinnfull.sampling import SegmentSampler, FixedSegmentSampler
-from sinnfull.data_objects import DataAccessor
-from sinnfull.data_objects.synthetic import DataAccessor as SyntheticDataAccessor
+from sinnfull.data import DataAccessor
+from sinnfull.data.synthetic import DataAccessor as SyntheticDataAccessor
 from sinnfull.rng import get_seedsequence, get_fit_rng, get_sim_rng, draw_model_sample
-from sinnfull.models.objective_types import AccumulatedObjectiveFunction, Prior
+from sinnfull.models.base import AccumulatedObjectiveFunction, Prior
 from sinnfull.optim import OptimParams, Optimizer
 
 # %% tags=["remove-cell"]

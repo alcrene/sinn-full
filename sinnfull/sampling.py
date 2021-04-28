@@ -56,7 +56,7 @@ default_rng = np.random.default_rng()
 # These training segments are indicated by the shaded grey portion in the figure below.
 
 # %%
-from sinnfull.data_objects import DataAccessor   # These imports only used for type hints
+from sinnfull.data import DataAccessor   # These imports only used for type hints
 from mackelab_toolbox.typing import PintValue, RNGenerator
 from typing import Union, Tuple, List, Dict, Callable
 
