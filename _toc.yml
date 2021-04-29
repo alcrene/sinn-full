@@ -17,6 +17,7 @@
       - file: sinnfull/models/OU/ou-priors
       - file: sinnfull/models/OU/objectives
     - file: sinnfull/models/WC/WC
+    - file: sinnfull/models/GWN/GWN
 
   - file: sinnfull/optim/index
     sections:

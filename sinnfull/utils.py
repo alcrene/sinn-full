@@ -188,7 +188,7 @@ def add_to(clsname: str):
     Has an effect only in the module run as the __main__ script – this avoids
     obscuring tracebacks when the module is imported.
 
-    .. rubric:: Rational
+    .. rubric:: Rationale
        The purpose of this decorator is to allow a more literate form of coding
        within Jupyter notebooks, by splitting a class definition across multiple
        cells separated by Markdown-formatted explanations. This is especially
@@ -209,6 +209,9 @@ def add_to(clsname: str):
          code cells. In the .py file, code cells are effectively merged together.
        - Class definition cells must be properly indented, so that subsequent
          classes become part of the class definition when cells are merged.
+       - The argument-less `super()` will not work within decorated methods
+         (at least not in the notebook; in the module it will).
+         Providing arguments to `super` still works: `super(<classname>, self)`.
 
     .. note::
        The class name is passed as a string, not as a class instance.

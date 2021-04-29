@@ -25,14 +25,11 @@ import sinnfull
 if __name__ == "__main__":
     sinnfull.setup('numpy')
 
-# %%
-# %debug
-
 # %% tags=["hide-cell"]
 from typing import Any, Optional, Union
 import numpy as np
 import theano_shim as shim
-from mackelab_toolbox.typing import FloatX, Shared
+from mackelab_toolbox.typing import FloatX, Shared, Array
 from sinn.models import ModelParams, updatefunction, initializer
 from sinn.histories import TimeAxis, Series, AutoHist
 from sinn.utils import unlocked_hists
@@ -51,10 +48,10 @@ __all__ = ['WilsonCowan']
 # We take the following Wilson-Cowan model
 # :::{math}
 # :label: eq:wc-def  
-# \begin{align}
+# \begin{aligned}
 # α_e^{-1} \frac{d}{dt}{u}^e &= L[{u}^e] + {w}_e^{e} F^e[{u}^e] + {w}_i^{e} F^i[{u}^i] + I^e(t) \,,\\
 # α_i^{-1} \frac{d}{dt}{u}^i &= L[{u}^i] + {w}_e^{i} F^e[{u}^e] + {w}_i^{i} F^i[{u}^i] + I^i(t) \,;
-# \end{align}  
+# \end{aligned}  
 # :::
 # where
 # \begin{align}
@@ -84,24 +81,24 @@ __all__ = ['WilsonCowan']
 
 # %% tags=["hide-input"]
 class WilsonCowan(Model):
-    time :TimeAxis
+    time: TimeAxis
 
     class Parameters(ModelParams):
-        α :Shared[FloatX,1]
-        β :Shared[FloatX,1]
-        w :Shared[FloatX,2]
-        h :Shared[FloatX,1]
-        M :int
-    params :Parameters
+        α: Shared[FloatX,1]
+        β: Shared[FloatX,1]
+        w: Shared[FloatX,2]
+        h: Shared[FloatX,1]
+        M: Union[int,Array[np.integer,0]]
+    params: Parameters
 
     ## Other variables retrievable from `self` ##
-    u :Series=None
-    I :Series
+    u: Series=None
+    I: Series
 
-    # State = the histories required to make dynamics Markovian
+    ## State = the histories required to make dynamics Markovian
     class State:
-        u :Any
-        I :Any
+        u: Any
+        I: Any
 
     ## Initialization ##
     # Allocate arrays for dynamic variables, and add padding for initial conditions
@@ -160,15 +157,46 @@ WilsonCowan.update_forward_refs()
 
 # %% tags=["remove-cell"]
 if __name__ == "__main__":
-    from sinnfull.models import models, priors, paramsets, objectives
+    from sinn.histories import Series, HistoryUpdateFunction
+    from sinn.models import TimeAxis
+    from sinnfull.models import paramsets
+    from sinnfull.models.GWN.GWN import GaussianWhiteNoise
+    from sinnfull.rng import get_np_rng, get_shim_rng
+    from IPython.display import display
+    import holoviews as hv
+    hv.extension('bokeh')
+    
+    # Parameters
+    rng_sim = get_shim_rng((1,0), exists_ok=True)
+        # exists_ok=True allows re-running the cell
+    Θ_wc  = paramsets.WC.default
+    Θ_gwn = paramsets.GWN.default
+    assert Θ_wc.M == Θ_gwn.M
+    time  = TimeAxis(min=0, max=5, step=2**-5)
+    
+    # Model
+    noise_source = GaussianWhiteNoise(
+        time  =time,
+        params=Θ_gwn,
+        rng   =rng_sim
+    )
+    model = WilsonCowan(
+        time  =time,
+        params=Θ_wc,
+        I     =noise_source.ξ
+    )
+    # Set initial conditions
+    model.u[-1] = 0
+    # Integrate
+    model.integrate(upto='end')
 
     # %%
-    models
+    traces = []
+    for hist in model.history_set:
+        traces.extend( [hv.Curve(trace, kdims=['time'],
+                                 vdims=[f'{hist.name}{i}'])
+                        for i, trace in enumerate(hist.traces)] )
 
-    # %%
-    priors
-
-    # %%
-    objectives
+    display(hv.Layout(traces).cols(Θ_wc.M))
 
 # %%

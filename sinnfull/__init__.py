@@ -32,6 +32,10 @@ from mackelab_toolbox.cgshim import shim, typing as mtbtyping
 from mackelab_toolbox.utils import sentinel
 from pathlib import Path
 from types import SimpleNamespace
+# NB: To avoid issues, holoviews must be imported before
+# django (which smttask indirectly imports) (noted with holoviews 1.14.3)
+import holoviews
+
 import smttask
 import smttask.view
 from smttask.view import RecordStoreView

@@ -18,9 +18,9 @@
 #
 # :::{caution}
 #
-# These tests date _must be updated_ to reflect changes since they were written.
+# These tests _must_ be updated to reflect changes since they were written.
 #
-# They do _not_ currently work.  
+# They do _not_ currently work.
 # :::
 
 # %% [markdown]
@@ -48,7 +48,7 @@
 # %%
 if __name__ == "__main__":
     from sinnfull.optim.optimizers.alternated import *
-    
+
     import itertools
     from sinnfull import ureg
     from sinnfull.parameters import ParameterSet

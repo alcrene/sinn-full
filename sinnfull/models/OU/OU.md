@@ -37,13 +37,14 @@ import numpy as np
 import pymc3 as pm
 from pydantic import validator
 import theano_shim as shim
-from mackelab_toolbox.typing import Array, FloatX, Shared, Tensor, AnyRNG, IndexableNamespace
+from mackelab_toolbox.typing import (
+    Array, FloatX, Shared, Tensor, IndexableNamespace, AnyRNG, RNGenerator)
 
 from sinn.models import  ModelParams, updatefunction, initializer
 from sinn.histories import TimeAxis, Series, AutoHist
 from sinn.utils import unlocked_hists
 
-from sinnfull.utils import add_to, add_property_to
+from sinnfull.utils import add_to
 from sinnfull.models.base import Model, Param, tag
 ```
 
@@ -59,10 +60,10 @@ Spiketrain.__hash__
 __all__ = ['OU_AR', 'OU_finite_noise']
 ```
 
-:::{Note}  
+:::{Note}
 The formulations of the OU process below are written explicitely as functions of $\log \tilde{τ}$ and $\log \tilde{σ}$, where $\tilde{τ}$ and $\tilde{σ}$ are the parameters controlling the correlation time and noise strength of the process respectively.
 
-We do this because these are scale parameters that may vary over many orders of magnitude, and we've found that inferrence works best for such parameters when performed in log space. Moreover, since both are strictly positive, this transformation is bijective.  
+We do this because these are scale parameters that may vary over many orders of magnitude, and we've found that inferrence works best for such parameters when performed in log space. Moreover, since both are strictly positive, this transformation is well-defined and bijective.
 :::
 $\newcommand{\T}{\intercal}$
 
@@ -83,7 +84,7 @@ I^j &= \sum_{m=1}^{\tilde{M}} \tilde{A}_m^j \tilde{W}_m^{j} \tilde{I}^m \,.
 
 :::{Note}
 
-This parameterization is Markovian: the distribution of $I_k$ depends only on $I_{k-1}$. This allows the likelihood to factorize over time points, but may make it more difficult to infer $\tilde{τ}$ or $\tilde{σ}$.  
+This parameterization is Markovian: the distribution of $I_k$ depends only on $I_{k-1}$. This allows the likelihood to factorize over time points, but may make it more difficult to infer $\tilde{τ}$ or $\tilde{σ}$.
 :::
 
 +++
@@ -103,17 +104,17 @@ I_k &= \tilde{W} \tilde{I}_k
 :tags: [hide-input]
 
 class OU_AR(Model):
-    time :TimeAxis
+    time: TimeAxis
 
     ## Parameters ##
     class Parameters(ModelParams):
-        μtilde :Shared[FloatX,1]
-        logτtilde :Shared[FloatX,1]
-        logσtilde :Shared[FloatX,1]
-        Wtilde :Shared[FloatX,2]
-        Atilde :Param[np.int16,2]
-        M      :Union[int,Array[np.integer,0]]
-        Mtilde :Union[int,Array[np.integer,0]]
+        μtilde   : Shared[FloatX,1]
+        logτtilde: Shared[FloatX,1]
+        logσtilde: Shared[FloatX,1]
+        Wtilde   : Shared[FloatX,2]
+        Atilde   : Param[np.int16,2]
+        M        : Union[int,Array[np.integer,0]]
+        Mtilde   : Union[int,Array[np.integer,0]]
         @property
         def τtilde(self):
             return shim.exp(self.logτtilde)
@@ -123,16 +124,16 @@ class OU_AR(Model):
         @validator('M', 'Mtilde')
         def only_plain_ints(cls, v):
             return int(v)
-    params :Parameters
+    params: Parameters
 
     ## Other variables retrievable from `self` ##
-    I      :Series=None
-    Itilde :Series=None
-    rng    :AnyRNG
+    I     : Series=None
+    Itilde: Series=None
+    rng   : AnyRNG=None
 
-    # State = the histories required to make dynamics Markovian
+    ## State = the histories required to make dynamics Markovian
     class State:
-        Itilde :Any  # The type is unimportant, so use Any
+        Itilde: Any  # The type is unimportant, so use Any
 
     ## Initialization ##
     # Allocate arrays for dynamic variables, and add padding for initial conditions
@@ -148,9 +149,9 @@ class OU_AR(Model):
                       dtype=shim.config.floatX, iterative=False)
     @initializer('rng')
     def rng_init(cls, rng):
-        """Note: Prefer passing as argument, so that all model components 
-        have the same RNG."""
-        return shim.config.RandomStreams()
+        """Note: Instead of relying on this method, prefer passing `rng` as an
+        argument, so that all model components have the same RNG."""
+        return shim.config.RandomStream()
 
     def initialize(self, initializer=None):
         """Set the initial conditions."""
@@ -202,8 +203,8 @@ class OU_AR(Model):
 
 Here $\odot$ denotes the Hadamard product.
 
-:::{margin} Code  
-`OU_AR`: Stationary distribution  
+:::{margin} Code
+`OU_AR`: Stationary distribution
 :::
 
 ```{code-cell} ipython3
@@ -212,8 +213,8 @@ Here $\odot$ denotes the Hadamard product.
     @add_to('OU_AR')
     @classmethod
     def _stationary_stats(cls, params: ModelParams):
-        return {'Itilde': {'avg': params.μtilde, 'std': params.σtilde*shim.sqrt(params.τtilde)}}
-    
+        return {'Itilde': {'mean': params.μtilde, 'std': params.σtilde*shim.sqrt(params.τtilde)}}
+
     @add_to('OU_AR')
     @classmethod
     def stationary_dist(cls, params: ModelParams, seed=None):
@@ -227,7 +228,7 @@ Here $\odot$ denotes the Hadamard product.
         with pm.Model() as statdist:
             Itilde_stationary = pm.Normal(
                 "Itilde",
-                mu=stats['Itilde']['avg'], sigma=stats['Itilde']['std'],
+                mu=stats['Itilde']['mean'], sigma=stats['Itilde']['std'],
                 shape=(params.Mtilde,)
             )
             I_stationary = pm.Deterministic(
@@ -243,8 +244,8 @@ Here $\odot$ denotes the Hadamard product.
 |$I$| `I` | dynamic variable | Output OU process |
 |$\tilde{I}$| `Itilde` | dynamic variable | Internal independent OU process |
 |$\tilde{\mu}$| `μtilde` | parameter | mean of $\tilde{I}$ |
-|$\tilde{\tau}$| `τtilde` | parameter | correlation time scale |
-|$\tilde{\sigma}$| `σtilde` | parameter | noise strength |
+|$\log \tilde{\tau}$| `logτtilde` | parameter | (log of the) correlation time scale |
+|$\log \tilde{\sigma}$| `logσtilde` | parameter | (log of the) noise strength |
 |$\tilde{W}$ | `Wtilde` | parameter | mixing of independent OU components (magnitude) |
 |$\tilde{A}$ | `Atilde` | parameter | mixing of independent OU components (sign) |
 |$M$ | `M` | parameter | number of output components (dim $I$) |
@@ -281,9 +282,9 @@ Specifically, we do the following:
      \tilde{σ}^1 \geq \tilde{σ}^2 \geq \dotsb \geq \tilde{σ}^{\tilde{M}}
    \end{equation}
    Note that the likelihood remains smooth in the parameters despite the additional permutation.
-   
-:::{margin} Code  
-`OU_AR`: Degenaracy removal  
+
+:::{margin} Code
+`OU_AR`: Degenaracy removal
 :::
 
 ```{code-cell} ipython3
@@ -324,7 +325,7 @@ Specifically, we do the following:
         if in_place:
             #I = self.I.get_trace(include_padding=True)
             Itilde = self.Itilde.get_trace(include_padding=True)
-            
+
         # Remove scaling degeneracy
         σfactor = abs(Θ.Wtilde.sum(axis=0))
         Θ.logσtilde += np.log(σfactor)  # Multiply by factor = add log of factor to log
@@ -367,8 +368,8 @@ Specifically, we do the following:
 
 It can be useful to also define a `get_test_parameters` method on the class, to run tests without needing to specify a prior.
 
-:::{margin} Code  
-`OU_AR`: Test parameters  
+:::{margin} Code
+`OU_AR`: Test parameters
 :::
 
 ```{code-cell} ipython3
@@ -376,8 +377,11 @@ It can be useful to also define a `get_test_parameters` method on the class, to 
 
     @add_to('OU_AR')
     @classmethod
-    def get_test_parameters(cls):
-        rng = np.random.default_rng()
+    def get_test_parameters(cls, rng: Optional[RNGenerator]=None):
+        """
+        :param:rng: Any value accepted by `numpy.random.default_rng`.
+        """
+        rng = np.random.default_rng(rng)
         M = rng.integers(1,5)
         Mtilde = rng.integers(1,3)*2
         Θ = cls.Parameters(
@@ -415,7 +419,7 @@ if __name__ == "__main__":
     )
     model = OU_AR(time=time, params=Θ_OU, rng=shim.config.RandomStream())
     model.integrate('end', histories='all')
-    
+
     orig_I = model.I.get_trace().copy()
     orig_Itilde = model.Itilde.get_trace().copy()
 
@@ -449,7 +453,7 @@ if __name__ == "__main__":
     # Use T >= 50
     model.Itilde.data.mean(axis=0)
     model.Itilde.data.std(axis=0)
-    model.stationary_stats(model.params)['Itilde']
+    model.stationary_stats()['Itilde']
 ```
 
 ## Finite noise form
@@ -474,11 +478,11 @@ I_k &= \tilde{W} \tilde{I}_k
 
 :::{note}
 
-It is possible to avoid redundant definitions by inheriting another model. However rather than inheriting directly, one must do so via a mixin class, as we do below for `OU_FiniteNoise`.  
+It is possible to avoid redundant definitions by inheriting another model. However rather than inheriting directly, one must do so via a mixin class, as we do below for `OU_FiniteNoise`.
 :::
 
-:::{margin} Code  
-`OU_FiniteNoise`: Dynamical equations  
+:::{margin} Code
+`OU_FiniteNoise`: Dynamical equations
 :::
 
 ```{code-cell} ipython3
@@ -504,8 +508,8 @@ class OU_FNMixin:
 \mathrm{Var}(\tilde{I}_\infty) &= \tilde{\sigma}^2 & \mathrm{Cov}(I_\infty) &= \tilde{A} \tilde{W} \, \tilde{\sigma}^2 \, \tilde{W}^\T \tilde{A}^\T \,.\\
 \end{align}
 
-:::{margin} Code  
-`OU_FiniteNoise`: Stationary distribution  
+:::{margin} Code
+`OU_FiniteNoise`: Stationary distribution
 :::
 
 ```{code-cell} ipython3

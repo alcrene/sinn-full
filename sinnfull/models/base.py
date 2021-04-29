@@ -8,9 +8,9 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (sinnfull)
+#     display_name: Python (sinn-full)
 #     language: python
-#     name: sinnfull
+#     name: sinn-full
 # ---
 
 # %% [markdown]
@@ -49,7 +49,7 @@ import mackelab_toolbox.typing as mtbtyping
 from mackelab_toolbox.typing import IndexableNamespace, Array, Shared
 from mackelab_toolbox.pymc_typing import PyMC_Model, PyMC_RV
 
-from sinnfull.utils import TypeDict
+from sinnfull.utils import TypeDict, add_to
 from sinnfull.parameters import ParameterSet
 from sinnfull.rng import get_seedsequence
 from sinnfull.tags import TagDecorator
@@ -96,10 +96,16 @@ Param=ParamMeta()
 #
 # These latter methods take care of generic type casting, so that one only needs to implement the equations themselves in `_stationary_stats`. See the [Ornstein-Uhlenbeck](./OU/OU) model for an example.
 
+# %% [markdown]
+# :::{margin} Code
+# `Model`: Stationary distribution
+# :::
+
 # %% tags=["hide-input"]
 class Model(sinn.Model):
     _compiled_functions: dict=PrivateAttr(default_factory=lambda: {})
 
+    # Subclasses may use instance methods if necessary
     @classmethod
     def _stationary_stats(cls, params: ModelParams):
         """
@@ -108,6 +114,15 @@ class Model(sinn.Model):
 
         If expressions for the stationary statistics are not available, this function
         should raise `NotImplementedError`.
+        
+        Returns
+        -------
+        Dict[str,Dict[str,Array]]
+            {hist name: {stat name: stat val, ...},
+             ...}
+            For consistency, statistics should follow the names used in `scipy.stats`:
+            - 'mean'
+            - 'std'
         """
         raise NotImplementedError
 
@@ -121,10 +136,13 @@ class Model(sinn.Model):
         # Variable names must match those of the histories
         raise NotImplementedError
 
-    @classmethod
-    def stationary_stats(cls, params: Union[ModelParams, IndexableNamespace, dict],
-                         _max_cost: int=10
-                        ) -> Union[ModelParams, IndexableNamespace]:
+    # NB: In rare cases, stationary distributions methods may depend on the model 
+    #     (spec. GWN depends on dt), so we can't force them to be @classmethods
+    def stationary_stats(
+        self,
+        params: Union[None, ModelParams, IndexableNamespace, dict]=None,
+        _max_cost: int=10
+        ) -> Union[ModelParams, IndexableNamespace]:
         """
         Public wrapper for _stationary_stats, which does type casting.
         Returns either symbolic or concrete values, depending on whether `params`
@@ -135,16 +153,19 @@ class Model(sinn.Model):
 
         Parameters
         -----------
-        params: Any value which can be used to construct a `cls.Parameters` instance.
-        _max_cost: Default value should generally be fine. See `theano_shim.graph.eval`
-            for details.
+        params: Any value which can be used to construct a `cls.Parameters`
+            instance. If `None`, `self.params` is used.
+        _max_cost: Default value should generally be fine. See
+            `theano_shim.graph.eval` for details.
         """
+        if params is None:
+            params = self.params
         symbolic_params = shim.is_symbolic(params)
         # Casting into cls.Parameters is important because cls.Parameters
         # might use properties to define transforms of variables
         if not isinstance(params, cls.Parameters):
             params = cls.Parameters(params)
-        stats = cls._stationary_stats(params)
+        stats = self._stationary_stats(params)
         if not symbolic_params:
             stats = shim.eval(stats)
         return stats
@@ -184,6 +205,25 @@ class Model(sinn.Model):
                 stats[key[0]] = {key[1]: statval}
         return stats
 
+# %% [markdown]
+# ### Testing
+#
+# Subclasses may optionally define a `get_test_parameters` class method, which is essentially a hard-coded default prior. This is useful to run tests without needing to specify a prior.
+#
+# :::{margin} Code
+# `Model`: Test parameters
+# :::
+
+    # %%
+    @add_to('Model')
+    @classmethod
+    def get_test_parameters(cls, rng: Union[None,int,RNGenerator]=None):
+        """
+        :param:rng: Any value accepted by `numpy.random.default_rng`.
+        """
+        rng = np.random.default_rng(rng)  # Use `rng` to draw random parameters
+        raise NotImplementedError
+
 
 # %% [markdown]
 # (priors)=
@@ -217,9 +257,9 @@ class Model(sinn.Model):
 
 # %% [markdown]
 # (prior-types-and-spaces)=
-# :::{sidebar} RV types
+# :::{sidebar} Relation to RV types
 #
-# Random variables (RVs) in a prior can be of four PyMC3 types: `Constant`, `FreeRV`, `TransformedRV` or `Deterministic`, with each `TransformedRV` is associated to a `FreeRV` via a bijection.
+# Random variables (RVs) in a prior can be of four[^num-RVs] PyMC3 types: `Constant`, `FreeRV`, `TransformedRV` or `Deterministic`, with each `TransformedRV` is associated to a `FreeRV` via a bijection.
 #
 # Optimization space
 # ~ contains instances of `FreeRV`.
@@ -232,17 +272,19 @@ class Model(sinn.Model):
 # ~ contains instances of `Constant`, `Constant`, `FreeRV`, `TransformedRV` and `Deterministic`.
 # ~ Represented by `~sinn.models.ModelParams`.
 # :::
+#
+# [^num-RVs]: PyMC3 also defines the `ObservedRV` type, but by definition a prior should not contain observed variables.
 
 # %% [markdown]
 # Note that we have
 #
-# - Random variables (RVs) constructed with one of the PyMC3 distributions.
+# - **Random variables** (RVs) which are constructed with one of the PyMC3 distributions.
 #   These form what we call the _prior space_.
-# - Bounded RVs are associated to unbounded RVs via bijections.
+# - **Bounded RVs**, which are associated to unbounded RVs via bijections.
 #   These are automatically defined by PyMC3.
 #   Since the unbounded variables are those with respect to which optimizers will differentiate,
 #   we call the space of unbounded variables the _optimization space_.
-# - RVs which are the result of determistically transforming other RVs.
+# - RVs which are the result of **determistically transforming** other RVs.
 #   These transformations are used to define parameters of the model which are derived from others.
 #   We call the space of variables defined by the model the _model space_
 #
@@ -271,6 +313,13 @@ class Model(sinn.Model):
 #
 # The disadvantage of `~pm.Deterministic` variables is that they don't provide a _log det jacobian_ and thus are not invertible. In general this should not be required, but if it is, it might be possible to specify the transformation using a `~pm.transforms.TransformedVar` instead. Since this is only lightly documented within PyMC3's developer documentation, we've compiled some WIP notes in the [developer docs](../../docs/Understanding_PyMC3_Transforms.ipynb). Note that we've never actually used a custom transformation in our models, and can't speak to their ultimate usefulness for this purpose.
 #
+# :::
+
+# %% [markdown]
+# :::{margin} Code  
+# `Prior`: Space transformations  
+# `Prior`: Variable substitution  
+# `Prior`: Sampling  
 # :::
 
 # %% tags=["hide-input"]
@@ -728,6 +777,12 @@ import sinnfull
 for k in list(sinnfull.json_encoders.keys()):
     del sinnfull.json_encoders[k]
 sinnfull.json_encoders.update(mtbtyping.json_encoders)
+
+# %% [markdown]
+# :::{margin} Code
+# `ObjectiveFunction`: Function artithmetic  
+# `ObjectiveFunction`: Tag validation
+# :::
 
 # %% tags=["hide-input"]
 class ObjectiveFunction(BaseModel, abc.ABC):
