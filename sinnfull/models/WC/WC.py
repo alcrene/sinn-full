@@ -2,7 +2,7 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: py:percent
+#     formats: py:percent,md:myst
 #     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
 #     text_representation:
 #       extension: .py
@@ -47,11 +47,11 @@ __all__ = ['WilsonCowan']
 # $\newcommand{\tag}[1]{\qquad\text{(#1)}}$
 # We take the following Wilson-Cowan model
 # :::{math}
-# :label: eq:wc-def  
+# :label: eq:wc-def
 # \begin{aligned}
 # α_e^{-1} \frac{d}{dt}{u}^e &= L[{u}^e] + {w}_e^{e} F^e[{u}^e] + {w}_i^{e} F^i[{u}^i] + I^e(t) \,,\\
 # α_i^{-1} \frac{d}{dt}{u}^i &= L[{u}^i] + {w}_e^{i} F^e[{u}^e] + {w}_i^{i} F^i[{u}^i] + I^i(t) \,;
-# \end{aligned}  
+# \end{aligned}
 # :::
 # where
 # \begin{align}
@@ -75,7 +75,7 @@ __all__ = ['WilsonCowan']
 # where $\odot$ denotes the Hadamard product.
 #
 # :::{margin} Code
-# `WilsonCowan`: Parameters  
+# `WilsonCowan`: Parameters
 # `WilsonCowan`: Dynamical equations
 # :::
 
@@ -141,13 +141,13 @@ class WilsonCowan(Model):
 # Moreover, under those conditions these equations are also closed, since then $u$ is also a Gaussian process: the expectations involving $u_t$ are taken with respect to the Gaussian with mean variance given by the solutions. In some cases (such as the proposed linear $L[\cdot]$) these may be carried out analytically, otherwise we may perform a Taylor expansion and take the expectation of the polynomials; the proposed sigmoid for $F[\cdot]$ is antisymmetric and linear around $h$, and should be tractable with this approach.
 
 # %% [markdown]
-# ### Variables
+# ## Variables
 # |**Model variable**| Identifier | Type | Description |
 # |--|--|--|--
 # |${u}$| `u` | dynamic variable | population activity |
 # |$I$| `I` | dynamic variable | external input |
 # |$α$| `α` | parameter | time scale |
-# |$β$| `β` | parameter | sigmoid steepnees |
+# |$β$| `β` | parameter | sigmoid steepness |
 # |$h$| `h` | parameter | sigmoid centre |
 # |${w}$| `w` | parameter | connectivity |
 # |$M\in 2\mathbb{N}$| `M` | parameter | number of populations; even because populations are split into E/I pairs |
@@ -155,7 +155,13 @@ class WilsonCowan(Model):
 # %% tags=["remove-cell"]
 WilsonCowan.update_forward_refs()
 
-# %% tags=["remove-cell"]
+# %% [markdown]
+# ## Examples
+
+# %% [markdown]
+# Wilson-Cowan model driven by Gaussian white noise.
+
+# %% tags=["hide-input", "remove-output"]
 if __name__ == "__main__":
     from sinn.histories import Series, HistoryUpdateFunction
     from sinn.models import TimeAxis
@@ -165,17 +171,18 @@ if __name__ == "__main__":
     from IPython.display import display
     import holoviews as hv
     hv.extension('bokeh')
-    
+
     # Parameters
     rng_sim = get_shim_rng((1,0), exists_ok=True)
         # exists_ok=True allows re-running the cell
-    Θ_wc  = paramsets.WC.default
-    Θ_gwn = paramsets.GWN.default
+    Θ_wc  = paramsets.WC.rich
+    Θ_gwn = paramsets.GWN.rich
+    #Θ_gwn['μ'] = [500., -.5]
     assert Θ_wc.M == Θ_gwn.M
-    time  = TimeAxis(min=0, max=5, step=2**-5)
-    
+    time  = TimeAxis(min=0, max=.4, step=2**-10)
+
     # Model
-    noise_source = GaussianWhiteNoise(
+    noise = GaussianWhiteNoise(
         time  =time,
         params=Θ_gwn,
         rng   =rng_sim
@@ -183,14 +190,17 @@ if __name__ == "__main__":
     model = WilsonCowan(
         time  =time,
         params=Θ_wc,
-        I     =noise_source.ξ
+        I     =noise.ξ
     )
     # Set initial conditions
     model.u[-1] = 0
+
+    # %% tags=["hide-input", "remove-output"]
     # Integrate
+    noise.integrate(upto='end')  # Integrating the noise first allows a batch call
     model.integrate(upto='end')
 
-    # %%
+    # %% tags=["hide-input"]
     traces = []
     for hist in model.history_set:
         traces.extend( [hv.Curve(trace, kdims=['time'],
@@ -198,5 +208,29 @@ if __name__ == "__main__":
                         for i, trace in enumerate(hist.traces)] )
 
     display(hv.Layout(traces).cols(Θ_wc.M))
+
+# %% [markdown]
+# Functions $F$ and $L$ used for the simulation above. Right panel is enlarged to show the sigmoid.
+
+# %%
+if __name__ == "__main__":
+    panels = []
+    for u_arr in [np.linspace(-10, 10), np.linspace(-.03, .03)]:
+        curve_F = hv.Curve(zip(u_arr, model.F(u_arr-model.h)), kdims=["u"], label="F(u)")
+        curve_L = hv.Curve(zip(u_arr, model.L(u_arr)), kdims=["u"], label="L(u)")
+        ov = curve_F * curve_L
+        panels.append(ov)
+    ov.opts(legend_position="top_left")
+    # Zoom rectangle – so small we don't really see it
+    umin, ymin = curve_F.data.min(axis=0)
+    umax, ymax = curve_F.data.max(axis=0)
+    rect = hv.Rectangles([(umin, ymin, umax, ymax)]).opts(color="gray", alpha=.5)
+    panels[0] = rect * panels[0]
+    # Parameters table
+    Θtable = hv.Table([["β", str(model.β)], ["h", str(model.h)]],
+                      kdims=["name", "value"])
+    panels.append(Θtable)
+    layout = hv.Layout(panels).opts(shared_axes=False)
+    display(layout)
 
 # %%

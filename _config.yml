@@ -21,7 +21,7 @@ only_build_toc_files        : false
 #######################################################################################
 # Execution settings
 execute:
-  execute_notebooks: "off"
+  execute_notebooks         : "off"
   exclude_patterns          : [Optimize_WF_template*]    # A list of patterns to *skip* in execution (e.g. a notebook that takes a really long time)
 
 #######################################################################################

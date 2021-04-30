@@ -15,9 +15,14 @@
     - file: sinnfull/models/OU/OU
       sections:
       - file: sinnfull/models/OU/ou-priors
-      - file: sinnfull/models/OU/objectives
+      - file: sinnfull/models/OU/ou-objectives
     - file: sinnfull/models/WC/WC
+      sections:
+      - file: sinnfull/models/WC/wc-priors
+      - file: sinnfull/models/WC/wc-objectives
     - file: sinnfull/models/GWN/GWN
+      sections:
+      - file: sinnfull/models/GWN/gwn-priors
 
   - file: sinnfull/optim/index
     sections:

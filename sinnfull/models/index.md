@@ -17,6 +17,7 @@ Models are composed of three types of objects:
   - Combined with the _prior_, defines the objective that will be optimized.
   - Equated to the log probability of the parameters given the observations.  
     Accordingly, the combination with the prior is simply `objective + prior.logp`.
+  - Should be _maximized_ to obtain optimal parameters.
 
 (model-organization)=
 ## Organization

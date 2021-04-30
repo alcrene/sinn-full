@@ -3,11 +3,11 @@
 # jupyter:
 #   jupytext:
 #     formats: py:percent
-#     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
+#       jupytext_version: 1.9.1
 #   kernelspec:
 #     display_name: Python (sinn-full)
 #     language: python
@@ -15,17 +15,21 @@
 # ---
 
 # %% [markdown]
-# # OU priors
+# # GWN priors
+
+# %%
+from __future__ import annotations
 
 # %% tags=["remove-cell"]
 if __name__ == "__main__":
     import sinnfull
     sinnfull.setup('theano')
 
-# %% tags=["remove-input"]
+# %% tags=["hide-input"]
 import numpy as np
 import pymc3 as pm
 from sinnfull.models.base import tag, Prior
+import theano_shim as shim
 if __name__ == "__main__":
     from IPython.display import display
     from sinnfull.models._utils import truncated_histogram, sample_prior
@@ -38,43 +42,48 @@ if __name__ == "__main__":
 # :::
 
 # %% [markdown]
-# ## Dale's law prior
-# This prior imposes a sign on the columns of $\tilde{W}$, such that each process $\tilde{I}$ is either purely excitatory or purely inhibitory.
-#
-# Fixing the sign this way has some neuroscience justification in the form of Dale's law.
+# ## Default prior
 
 # %%
-@tag('OU_AR', 'OU_FiniteNoise')  # Both forms of tagging
-@tag.default                     # are equivalent
-@tag.dale
-def OU_DalePrior(M: int, Mtilde):
+@tag.default
+def GWN_Prior(M:int, mu_mean=0., mu_std=1., logsigma_mean=0., logsigma_std=1.):
     with Prior() as prior:
-        assert M % 2 == 0                   
-            # Having odd M would imply having one extra positive W
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
-        pm.Deterministic('Mtilde', shim.constant(tilde, dtype='int16'))
-        # Create sign array, with half +1, half -1
-        # Each column of A*Wtilde has the same sign (column = input latent process)
-        A = np.concatenate((np.ones(Mtilde//2, dtype='int16'),
-                            -np.ones(Mtilde//2, dtype='int16')))
-        A = pm.Constant('A', A, shape=(Mtilde,), dtype=A.dtype)
-        μ = pm.Normal('μtilde', mu=0, sigma=2, shape=(Mtilde,))
-        logτtilde = pm.Normal('logτtilde', mu=0, sigma=1, shape=(Mtilde,))
-        _Wtilde_transp = pm.Dirichlet('_Wtilde_transp', a=np.ones((M,Mtilde)))
-        Wtilde = pm.Deterministic('Wtilde', _Wtilde_transp.T)
-        logσtilde = pm.Normal('logσtilde', mu=2, sigma=2, shape=(Mtilde,))
+        μ = pm.Normal('μ', mu_mean, mu_std, shape=(M,))
+        logσ = pm.Normal('logσ', logsigma_mean, logsigma_std, shape=(M,))
     return prior
 
 
 # %% tags=["remove-input"]
 if __name__ == "__main__":
-    prior = OU_DalePrior(2, 2)
+    prior = GWN_Prior(2)
     display(prior)
+    
+    display(sample_prior(prior).cols(3))
 
-    # Verify that all columns sum to one
-    assert np.isclose(prior.random((3,))['Wtilde'].sum(axis=0), 1).all()
 
-    display(sample_prior(prior))
+# %% [markdown]
+# ## Zero-mean prior
+#
+# This prior fixes the mean to 0.
+
+# %%
+@tag.zero_mean
+def GWN_ZeroMeanPrior(M:int, logsigma_mean=0., logsigma_std=1.):
+    with Prior() as prior:
+        pm.Deterministic('M', shim.constant(M, dtype='int16'))
+        pm.Deterministic('μ', shim.broadcast_to(
+            shim.constant(0, dtype=shim.config.floatX), (M,)))
+        logσ = pm.Normal('logσ', logsigma_mean, logsigma_std, shape=(M,))
+    return prior
+
+
+# %% tags=["remove-input"]
+if __name__ == "__main__":
+    prior = GWN_ZeroMeanPrior(2)
+    display(prior)
+    
+    display(sample_prior(prior).cols(3))
 
 # %% [markdown]
 # ### Test
@@ -84,12 +93,16 @@ if __name__ == "__main__":
 
 # %% tags=["hide-input"]
 if __name__ == "__main__":
-    from sinnfull.models.OU.OU import OU_AR, TimeAxis
-    prior = OU_DalePrior(2, 2)
+    from sinnfull.models.GWN.GWN import GaussianWhiteNoise, TimeAxis
+    prior = GWN_Prior(2)
     prior.random((4,1))        # Smoke test: `random()` works
     Prior.json_encoder(prior)  # Smoke test: serialization of prior
-
-    OU_AR.Parameters(**prior.random((4,1)))
+    GaussianWhiteNoise.Parameters(**prior.random((4,1)))
         # Smoke test: generated prior is compatible with model
+    
+    prior = GWN_ZeroMeanPrior(2)
+    prior.random((4,1))
+    Prior.json_encoder(prior)
+    GaussianWhiteNoise.Parameters(**prior.random((4,1)))
 
 # %%

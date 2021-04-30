@@ -114,7 +114,7 @@ class Model(sinn.Model):
 
         If expressions for the stationary statistics are not available, this function
         should raise `NotImplementedError`.
-        
+
         Returns
         -------
         Dict[str,Dict[str,Array]]
@@ -136,7 +136,7 @@ class Model(sinn.Model):
         # Variable names must match those of the histories
         raise NotImplementedError
 
-    # NB: In rare cases, stationary distributions methods may depend on the model 
+    # NB: In rare cases, stationary distributions methods may depend on the model
     #     (spec. GWN depends on dt), so we can't force them to be @classmethods
     def stationary_stats(
         self,
@@ -316,10 +316,10 @@ class Model(sinn.Model):
 # :::
 
 # %% [markdown]
-# :::{margin} Code  
-# `Prior`: Space transformations  
-# `Prior`: Variable substitution  
-# `Prior`: Sampling  
+# :::{margin} Code
+# `Prior`: Space transformations
+# `Prior`: Variable substitution
+# `Prior`: Sampling
 # :::
 
 # %% tags=["hide-input"]
@@ -605,9 +605,21 @@ class Prior(PyMC_Model):
             random_seed=seed,
             var_names=var_names,
             model=self)
-        assert all(len(θvalue)==1 for θvalue in Θ.values()), \
+        # Each sampled var will be wrapped in a list of length 1 (since we
+        # asked for one sample). However constant are not returned wrapped in a
+        # list, so we need to treat the two separately.
+        constant_names = {θname for θname in Θ
+                          if not shim.graph.symbolic_inputs(getattr(self, θname))}
+        constants = {θname: θ for θname, θ in Θ.items()
+                     if θname in constant_names}
+        samples = {θname: θ for θname, θ in Θ.items()
+                   if θname not in constant_names}
+        assert all(len(θvalue)==1 for θvalue in samples.values()), \
             "`sample_prior_predictive` did not return exactly 1 sample per parameter."
-        Θ_dict = {θname: Θ[θname][0] for θname in sorted(Θ)}
+        samples = {θname: θvalue[0] for θname, θvalue in samples.items()}
+        # Merge constants & samples back together and re-sort
+        Θ_dict = {**constants, **samples}
+        Θ_dict = {θname: Θ_dict[θname] for θname in sorted(Θ)}
         if space == 'optim':
             Θ_dict = self.forward_transform_params(Θ_dict)
         return Θ_dict
@@ -780,7 +792,7 @@ sinnfull.json_encoders.update(mtbtyping.json_encoders)
 
 # %% [markdown]
 # :::{margin} Code
-# `ObjectiveFunction`: Function artithmetic  
+# `ObjectiveFunction`: Function artithmetic
 # `ObjectiveFunction`: Tag validation
 # :::
 

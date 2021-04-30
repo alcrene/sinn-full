@@ -20,7 +20,7 @@ The Gaussian white noise model is mostly useful as an input to other models, but
 +++
 
 :::{attention}  
-`GaussianWhiteNoise` is a **noise source**, which for practical and technical reasons we distinguish from *models*. One can think of noise sources as models with no dynamics – since each time point is independent, they can be generated with one vectorized call to the random number generator. The extent to which this distinction is useful is still being worked out.
+`GaussianWhiteNoise` is a **noise source**, which for practical and technical reasons we distinguish from *models*. One can think of noise sources as models with no dynamics – since each time point is independent, they can be generated with one vectorized call to the random number generator. The extent to which this distinction is useful is still being worked out, but it at least seems to simplify implementations.
 
 At present noise sources do **not** inherit from `sinnfull.models.Model`, although much of the API is reproduced. This may change in the future.
 :::
@@ -46,8 +46,10 @@ from typing import Any, Optional, Union
 import numpy as np
 import theano_shim as shim
 from mackelab_toolbox.typing import FloatX, Shared, Array, AnyRNG, RNGenerator
-from pydantic import BaseModel, PrivateAttr  # Move with NoiseSource
+# Move with NoiseSource:
+from pydantic import BaseModel, PrivateAttr
 import sys
+from itertools import chain
 
 from sinn.models import ModelParams, updatefunction, initializer
 from sinn.histories import TimeAxis, Series, HistoryUpdateFunction
@@ -62,34 +64,43 @@ __all__ = ['GaussianWhiteNoise']
 
 ## Model equations
 
-This is a model for $M$ independent noise processes given by:
+This is a model for $M$ independent noise processes formally given by:
 
 :::{math}
 :label: eq:gwn-def
 \begin{aligned}
-ξ^m(t) &\sim \mathcal{N}(μ^m, {(σ^m)}^2) \\
+ξ^m(t) &\sim \mathcal{N}(μ^m, \cdot) \\
 \langle (ξ^m(t)-μ^m)(ξ^m(t')-μ^m) \rangle &= {(σ^m)}^2 δ(t-t')
 \end{aligned}
 :::
 
-where $m \in \{1, \dotsc, M\}$ and $μ^m, σ^m, ξ^m(t) \in \mathbb{R}$. In the equations below, as well as the code, we drop the index $m$ and treat $μ$, $σ$ and $ξ$ as arrays to which operations are applied element wise.
+where $m \in \{1, \dotsc, M\}$ and $μ^m, σ^m, ξ^m(t) \in \mathbb{R}$. In this form the standard deviation of $ξ^m(t)$ is ill-defined; this is easier to do with the discretized process (see Eq. [ξ_k](eq:gwn-discretized)).
+In the equations which follow, as well as the code, we drop the index $m$ and treat $μ$, $σ$ and $ξ$ as arrays to which operations are applied element wise.
 
 :::{Note}
 Below, we write the process explicitely as a function of $\log σ$.
 We do this because $σ$ is a scale parameters that may vary over many orders of magnitude, and we've found that inferrence works best for such parameters when performed in log space. Moreover, since it is strictly positive, this transformation is well-defined and bijective.
 :::
 
-### Discretized form (“update” equations)
+### Discretized form
 
 Formally, we define $ξ_k$ as
 
-$$ξ_k := \int_{t_k}^{t_k+Δt} ξ(t') dt' \,.$$
+$$ξ_k := \frac{1}{Δt} \int_{t_k}^{t_k+Δt} ξ(t') dt' \,.$$
 
-For the limit $\lim_{Δt \to 0} ξ_k$ to exist, we must have
+The consistency condition
 
-$$ξ_k \sim \mathcal{N}(μ, \exp(\log σ)^2/Δt) \,,$$
+$$\frac{1}{Δt} \int_{t_k}^{t_k+Δt}\!\! ξ(t') dt' = \frac{1}{2 Δt} \int_{t_k}^{t_k+Δt/2}\!\!\! ξ(t') dt' + \frac{1}{2 Δt} \int_{t_k+Δt/2}^{t_k+Δt} ξ(t') dt'$$
 
-which is the definition we use in implementations.
+requires
+:::{math}  
+:label: eq:gwn-discretized  
+\begin{gathered}
+ξ_k \sim \mathcal{N}\left(μ, \exp(\log σ)^2 \middle/ Δt\right) \,,
+\end{gathered}
+:::
+
+which is the definition we use in the implementation.
 
 :::{margin} Code  
 `GaussianWhiteNoise`: Parameters  
@@ -143,6 +154,7 @@ class GaussianWhiteNoise(BaseModel):
             namespace=self,
             input_names=self.ξ_upd.inputs
         )
+        self.ξ.range_update_function = self.ξ.update_function
 ```
 
 :::{margin} Code  
@@ -150,11 +162,8 @@ As the prototype for *noise sources*, all functionality is currently implemented
 :::
 
 ```{code-cell} ipython3
----
-jupyter:
-  source_hidden: true
-tags: [hide-input]
----
+:tags: [hide-input]
+
     @add_to('GaussianWhiteNoise')
     def integrate(self, upto='end'):
         # TODO: Do this in one vectorized operation.
@@ -213,6 +222,60 @@ tags: [hide-input]
     def dt(self):
         return self.time.dt
 
+    @add_property_to('GaussianWhiteNoise')
+    def unlocked_statehists(self):
+        return (h for h in self.statehists if not h.locked)
+
+    @add_property_to('GaussianWhiteNoise')
+    def locked_statehists(self):
+        return (h for h in self.statehists if h.locked)
+
+    @add_property_to('GaussianWhiteNoise')
+    def unlocked_histories(self):
+        return (h for h in self.history_set if not h.locked)
+
+    @add_property_to('GaussianWhiteNoise')
+    def unlocked_nonstatehists(self):
+        return (h for h in self.nonstatehists if not h.locked)
+
+    @add_property_to('GaussianWhiteNoise')
+    def rng_inputs(self):
+        rng_inputs = []
+        for h in self.unlocked_histories:
+            for nm in h.update_function.input_names:
+                inp = getattr(h.update_function.namespace, nm)
+                if (isinstance(inp, shim.config.RNGTypes)
+                    and inp not in rng_inputs):
+                    rng_inputs.append(inp)
+        return rng_inputs
+
+    @add_property_to('GaussianWhiteNoise')
+    def rng_hists(self):
+        rng_hists = []
+        for h in self.unlocked_histories:
+            for nm in h.update_function.input_names:
+                inp = getattr(h.update_function.namespace, nm)
+                if isinstance(inp, shim.config.RNGTypes):
+                    rng_hists.append(h)
+                    break
+        return rng_hists
+
+    @add_to('GaussianWhiteNoise')
+    def get_min_tidx(self, histories: Sequence[History]):
+        try:
+            return min(h.cur_tidx.convert(self.time.Index)
+                       for h in histories)
+        except IndexError as e:
+            raise IndexError(
+                "Unable to determine a current index for "
+                f"{self.name}. This usually happens accessing "
+                "`cur_tidx` before a model is initialized.") from e
+
+    @add_property_to('GaussianWhiteNoise')
+    def cur_tidx(self):
+        return self.get_min_tidx(self.statehists)
+
+    
     @add_to('GaussianWhiteNoise')
     def __getattribute__(self, attr):
         """
@@ -245,9 +308,31 @@ tags: [hide-input]
         else:
             return super(GaussianWhiteNoise,self).__getattribute__(attr)
     
+    @add_to('GaussianWhiteNoise')
+    def lock(self):
+        for hist in self.history_set:
+            hist.lock()
+    
+    @add_to('GaussianWhiteNoise')
+    def clear(self,after=None):
+        shim.reset_updates()
+        if after is not None:
+            after = self.time.Index(after)
+            for hist in self.unlocked_histories:
+                hist.clear(after=after.convert(hist.time.Index))
+        else:
+            for hist in self.unlocked_histories:
+                hist.clear()
+
+    def eval(self, max_cost :Optional[int]=None, if_too_costly :str='raise'):
+        for h in self.history_set:
+            h.eval(max_cost, if_too_costly)
+    
+    
     ## Copied from sinnfull.base.Model
     _compiled_functions: dict=PrivateAttr(default_factory=lambda: {})
-
+        
+    @add_to('GaussianWhiteNoise')
     def stationary_stats(
         self,
         params: Union[None, ModelParams, IndexableNamespace, dict]=None,
@@ -280,6 +365,7 @@ tags: [hide-input]
             stats = shim.eval(stats)
         return stats
 
+    @add_to('GaussianWhiteNoise')
     def stationary_stats_eval(self):
         """
         Equivalent to `self.stationary_stats(self.params).eval()`, with the
@@ -318,10 +404,9 @@ tags: [hide-input]
 
 ## Stationary state
 
-There are no dynamics to speak of, so the equations for stationary distribution are the same as for the model.
+This model has no dynamics, so the equations for stationary distribution are the same as for the model.
 
 $$\begin{aligned}
-ξ(t) &\sim \mathcal{N}(μ, \exp(\log σ)^2) \\
 ξ_k &\sim \mathcal{N}(μ, \exp(\log σ)^2/Δt)
 \end{aligned}$$
 
@@ -349,7 +434,7 @@ $$\begin{aligned}
         return statdist
 ```
 
-### Variables
+## Variables
 
 |**Model variable**| Identifier | Type | Description |
 |--------|--|--|--
@@ -397,10 +482,12 @@ GaussianWhiteNoise.update_forward_refs()  # Always safe to do this & sometimes r
 
 ```{code-cell} ipython3
 if __name__ == "__main__":
+    from tqdm.auto import tqdm
+    from scipy import stats
     import holoviews as hv
     hv.extension('bokeh')
     
-    time = TimeAxis(min=0, max=1, step=2**-7, unit=sinnfull.ureg.s)
+    time = TimeAxis(min=0, max=10, step=2**-6, unit=sinnfull.ureg.s)
     Θ = GaussianWhiteNoise.get_test_parameters(rng=123)
     noise = GaussianWhiteNoise(time=time, params=Θ)
     #model.integrate(upto='end')
@@ -412,9 +499,51 @@ if __name__ == "__main__":
 ```
 
 ```{code-cell} ipython3
-    traces = [hv.Curve(trace, kdims=['time'], vdims=[f'u{i}'])
+    traces = [hv.Curve(trace, kdims=['time'], vdims=[f'ξ{i}'])
               for i, trace in enumerate(noise.ξ.traces)]
     hv.Layout(traces)
+```
+
+## Testing
+
++++
+
+The integral of this process is a Brownian motion:
+
+$$\int_0^T ξ(t) dt \sim \mathcal{N}(μT, σ^2 T)$$
+
+We can use this to test the correctness of our implementation: simulate the `GaussianWhiteNoise` multiple times to form a Monte Carlo estimate of $p\left(\int_0^T ξ(t) dt\right)$, and compare with the expression above.
+
+```{code-cell} ipython3
+    int_ξ = []
+    N_sims = 100
+    T = (noise.tn-noise.t0)  # time we integrate for
+    for i in tqdm(range(N_sims)):
+        noise.clear()
+        noise.integrate('end')
+        int_ξ.append( noise.ξ.data.sum(axis=0)*noise.dt )
+```
+
+```{code-cell} ipython3
+    int_ξ_arr = np.array(int_ξ)
+    panels = []
+    for i in range(noise.M):
+        counts, edges = np.histogram(int_ξ_arr[:,i],
+                                     bins='auto',
+                                     density=True)
+        histogram = hv.Histogram((counts, edges),
+                                 kdims=[f"∫ξ{i}"], vdims=[f"p(∫ξ{i})"],
+                                 label="Monte Carlo"
+                                )
+        ξarr = np.linspace(edges[0], edges[-1], 100)
+        pdf_vals = stats.norm(loc=noise.μ*T.magnitude,
+                              scale=np.exp(noise.logσ)*np.sqrt(T.magnitude)
+                             ).pdf(ξarr)
+        pdf = hv.Curve(zip(ξarr, pdf_vals),
+                       kdims=[f"∫ξ{i}"], vdims=[f"p(∫ξ{i})"],
+                       label="Theory")
+        panels.append(histogram * pdf.opts(color='orange'))
+    hv.Layout(panels)
 ```
 
 ```{code-cell} ipython3
