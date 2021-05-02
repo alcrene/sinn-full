@@ -20,7 +20,7 @@
 # The Gaussian white noise model is mostly useful as an input to other models, but can also be inferred directly to test algorithms.
 
 # %% [markdown]
-# :::{attention}  
+# :::{attention}
 # `GaussianWhiteNoise` is a **noise source**, which for practical and technical reasons we distinguish from *models*. One can think of noise sources as models with no dynamics – since each time point is independent, they can be generated with one vectorized call to the random number generator. The extent to which this distinction is useful is still being worked out, but it at least seems to simplify implementations.
 #
 # At present noise sources do **not** inherit from `sinnfull.models.Model`, although much of the API is reproduced. This may change in the future.
@@ -41,14 +41,18 @@ import theano_shim as shim
 from mackelab_toolbox.typing import FloatX, Shared, Array, AnyRNG, RNGenerator
 # Move with NoiseSource:
 from pydantic import BaseModel, PrivateAttr
-import sys
+import sys, inspect
+from types import SimpleNamespace
 from itertools import chain
+from sinn.histories import History
+from sinn.models import PendingUpdateFunction
 
-from sinn.models import ModelParams, updatefunction, initializer
+from sinn.models import ModelParams, Model, updatefunction, initializer
 from sinn.histories import TimeAxis, Series, HistoryUpdateFunction
 
 from sinnfull.utils import add_to, add_property_to
 from sinnfull.models.base import Model, Param
+from sinnfull.typing_ import IndexableNamespace
 
 # %%
 __all__ = ['GaussianWhiteNoise']
@@ -86,8 +90,8 @@ __all__ = ['GaussianWhiteNoise']
 # $$\frac{1}{Δt} \int_{t_k}^{t_k+Δt}\!\! ξ(t') dt' = \frac{1}{2 Δt} \int_{t_k}^{t_k+Δt/2}\!\!\! ξ(t') dt' + \frac{1}{2 Δt} \int_{t_k+Δt/2}^{t_k+Δt} ξ(t') dt'$$
 #
 # requires
-# :::{math}  
-# :label: eq:gwn-discretized  
+# :::{math}
+# :label: eq:gwn-discretized
 # \begin{gathered}
 # ξ_k \sim \mathcal{N}\left(μ, \exp(\log σ)^2 \middle/ Δt\right) \,,
 # \end{gathered}
@@ -95,9 +99,9 @@ __all__ = ['GaussianWhiteNoise']
 #
 # which is the definition we use in the implementation.
 #
-# :::{margin} Code  
-# `GaussianWhiteNoise`: Parameters  
-# `GaussianWhiteNoise`: Update equation  
+# :::{margin} Code
+# `GaussianWhiteNoise`: Parameters
+# `GaussianWhiteNoise`: Update equation
 # :::
 
 # %% tags=["hide-input"]
@@ -105,16 +109,16 @@ class GaussianWhiteNoise(BaseModel):
     # Currently we just inherit from plain BaseModel
     # Eventually we may define NoiseSource with common functionality
     time: TimeAxis
-        
+
     class Parameters(ModelParams):
         μ   : Shared[FloatX, 1]
         logσ: Shared[FloatX, 1]
         M   : Union[int,Array[np.integer,0]]
     params: GaussianWhiteNoise.Parameters
-        
+
     ξ  : Series=None
     rng: AnyRNG=None
-        
+
     @initializer('ξ')
     def ξ_init(cls, ξ, time, M):
         return Series(name='ξ', time=time, shape=(M,), dtype=shim.config.floatX)
@@ -123,7 +127,7 @@ class GaussianWhiteNoise(BaseModel):
         """Note: Instead of relying on this method, prefer passing `rng` as an
         argument, so that all model components have the same RNG."""
         return shim.config.RandomStream()
-        
+
     @updatefunction('ξ', inputs=['rng'])
     def ξ_upd(self, k):
         μ = self.params.μ
@@ -131,13 +135,16 @@ class GaussianWhiteNoise(BaseModel):
         M = self.M; dt = self.dt
         dt = getattr(dt, 'magnitude', dt)
         return self.rng.normal(avg=μ, std=σ/shim.sqrt(dt), size=(M,))
-    
+
     ## Stuff that could be in NoiseSource class
-    
+
     _hist_identifiers  : List[str]=PrivateAttr(['ξ'])
     _kernel_identifiers: List[str]=PrivateAttr([])
     _model_identifiers : List[str]=PrivateAttr([])
-            
+
+    def initialize(self, initializer=None):
+        return
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.ξ.update_function = HistoryUpdateFunction(
@@ -149,19 +156,108 @@ class GaussianWhiteNoise(BaseModel):
 
 
 # %% [markdown]
-# :::{margin} Code  
-# As the prototype for *noise sources*, all functionality is currently implemented in `GaussianWhiteNoise`.  
+# :::{margin} Code
+# As the prototype for *noise sources*, all functionality is currently implemented in `GaussianWhiteNoise`.
 # :::
 
-    # %% tags=["hide-input"]
+    # %% tags=["hide-input"] jupyter={"source_hidden": true}
     @add_to('GaussianWhiteNoise')
     def integrate(self, upto='end'):
         # TODO: Do this in one vectorized operation.
         # REM: All that should be required is to define range_update_function
         self.ξ._compute_up_to(upto)
 
+    ## HACKS to match the sinn.Model interface
+    # These _might_ fix themselves if we inherit for some base Model class
+
+    @property
+    def _pending_update_functions(self):
+        return [e for e in self.__dict__.values()
+                if isinstance(e, PendingUpdateFunction)]
 
     ## Copied from sinn.models.Model
+
+    @add_to('GaussianWhiteNoise')
+    def __str__(self):
+        name = self.name
+        return "Model '{}' (t0: {}, tn: {}, dt: {})" \
+            .format(name, self.t0, self.tn, self.dt)
+
+    @add_to('GaussianWhiteNoise')
+    def __repr__(self):
+        return f"<{str(self)}>"
+
+    @add_to('GaussianWhiteNoise')
+    def _repr_html_(self):
+        summary = self.get_summary()
+        topdivline = '<div style="margin-bottom: 0; border-left: solid black 1px; padding-left: 10px">'
+        modelline = f'<p style="margin-bottom:0">Model <b>{summary.model_name}</b>'
+        if isinstance(self, Model):  # Eventually we want to be able to be able to call this on the class
+            modelline += f' (<code>t0: {self.t0}</code>, <code>tn: {self.tn}</code>, <code>dt: {self.dt}</code>)'
+        modelline += '</p>'
+        topulline = '<ul style="margin-top: 0;">'
+        stateline = '<li>State variables: '
+        stateline += ', '.join([f'<code>{v}</code>' for v in summary.state_vars])
+        stateline += '</li>'
+        paramblock = '<li>Parameters\n<ul>\n'
+        if isinstance(summary.params, dict):
+            for name, val in summary.params.items():
+                paramblock += f'<li><code> {name}={val}</code></li>\n'
+        else:
+            for name, val in summary.params:
+                paramblock += f'<li><code> {name}</code></li>\n'
+        paramblock += '</ul>\n</li>'
+        updfnblock = ""
+        for varname, upd_code in summary.update_functions.items():
+            updfnblock += f'<li>Update function for <code>{varname}</code>\n'
+            updfnblock += f'<pre>{upd_code}</pre>\n</li>\n'
+        if not summary.nested_models:
+            nestedblock = ""
+        else:
+            nestedblock = '<li>Nested models:\n<ul>'
+            for nestedmodel in summary.nested_models:
+                nestedblock += f'<li>{nestedmodel._repr_html_()}</li>'
+            nestedblock += '</ul></li>\n'
+
+        return "\n".join([
+            topdivline, modelline, topulline, stateline,
+            paramblock, updfnblock, nestedblock,
+            "</ul>", "</div"
+        ])
+
+
+    @add_to('GaussianWhiteNoise')
+    def __getattribute__(self, attr):
+        """
+        Retrieve parameters if their name does not clash with an attribute.
+        """
+        # Use __getattribute__ to maintain current stack trace on exceptions
+        # https://stackoverflow.com/q/36575068
+        if (not attr.startswith('_')      # Hide private attrs and prevent infinite recursion with '__dict__'
+            and attr != 'params'          # Prevent infinite recursion
+            and attr not in dir(self)     # Prevent shadowing; not everything is in __dict__
+            # Checking dir(self.params) instead of self.params.__fields__ allows
+            # Parameter classes to use @property to define transformed parameters
+            and hasattr(self, 'params') and attr in dir(self.params)):
+            # Return either a PyMC3 prior (if in PyMC3 context) or shared var
+            # Using sys.get() avoids the need to load pymc3 if it isn't already
+            pymc3 = sys.modules.get('pymc3', None)
+            param = getattr(self.params, attr)
+            if not hasattr(param, 'prior') or pymc3 is None:
+                return param
+            else:
+                try:
+                    pymc3.Model.get_context()
+                except TypeError:
+                    # No PyMC3 model on stack – return plain param
+                    return param
+                else:
+                    # Return PyMC3 prior
+                    return param.prior
+
+        else:
+            return super(GaussianWhiteNoise,self).__getattribute__(attr)
+
     @add_property_to('GaussianWhiteNoise')
     def name(self):
         return getattr(self, '__name__', type(self).__name__)
@@ -211,6 +307,12 @@ class GaussianWhiteNoise(BaseModel):
     @add_property_to('GaussianWhiteNoise')
     def dt(self):
         return self.time.dt
+
+    # >>>>>
+    @add_property_to('GaussianWhiteNoise')
+    def statehists(self):
+        return []
+    # <<<<<
 
     @add_property_to('GaussianWhiteNoise')
     def unlocked_statehists(self):
@@ -265,44 +367,248 @@ class GaussianWhiteNoise(BaseModel):
     def cur_tidx(self):
         return self.get_min_tidx(self.statehists)
 
-    
-    @add_to('GaussianWhiteNoise')
-    def __getattribute__(self, attr):
-        """
-        Retrieve parameters if their name does not clash with an attribute.
-        """
-        # Use __getattribute__ to maintain current stack trace on exceptions
-        # https://stackoverflow.com/q/36575068
-        if (not attr.startswith('_')      # Hide private attrs and prevent infinite recursion with '__dict__'
-            and attr != 'params'          # Prevent infinite recursion
-            and attr not in dir(self)     # Prevent shadowing; not everything is in __dict__
-            # Checking dir(self.params) instead of self.params.__fields__ allows
-            # Parameter classes to use @property to define transformed parameters
-            and hasattr(self, 'params') and attr in dir(self.params)):
-            # Return either a PyMC3 prior (if in PyMC3 context) or shared var
-            # Using sys.get() avoids the need to load pymc3 if it isn't already
-            pymc3 = sys.modules.get('pymc3', None)
-            param = getattr(self.params, attr)
-            if not hasattr(param, 'prior') or pymc3 is None:
-                return param
-            else:
-                try:
-                    pymc3.Model.get_context()
-                except TypeError:
-                    # No PyMC3 model on stack – return plain param
-                    return param
-                else:
-                    # Return PyMC3 prior
-                    return param.prior
+    #def curtidx_var(self):
 
+    #def stopidx_var(self):
+
+    #def batchsize_var(self):
+
+    @add_to('GaussianWhiteNoise')
+    def get_num_tidx(self, histories: Sequence[History]):
+        if not self.histories_are_synchronized():
+            raise RuntimeError(
+                f"Histories for the {self.name}) are not all "
+                "computed up to the same point. The compilation of the "
+                "model's integration function is ill-defined in this case.")
+        tidx = self.get_min_tidx(histories)
+        if not hasattr(self, '_num_tidx'):
+            object.__setattr__(
+                self, '_num_tidx',
+                shim.shared(np.array(tidx, dtype=self.tidx_dtype),
+                            f"t_idx ({self.name})") )
         else:
-            return super(GaussianWhiteNoise,self).__getattribute__(attr)
-    
+            self._num_tidx.set_value(tidx)
+        return self._num_tidx
+
+    @add_property_to('GaussianWhiteNoise')
+    def num_tidx(self):
+        return self.get_num_tidx(self.statehists)
+
+    @add_to('GaussianWhiteNoise')
+    def histories_are_synchronized(self):
+        try:
+            tidcs = [h.cur_tidx.convert(self.time.Index)
+                     for h in self.unlocked_statehists]
+        except IndexError:
+            # If conversion fails, its because the converted index would be out
+            # of the range of the new hist => hists clearly not synchronized
+            return False
+        locked_tidcs = [h.cur_tidx.convert(self.time.Index)
+                        for h in self.locked_statehists]
+        if len(tidcs) == 0:
+            return True
+        earliest = min(tidcs)
+        latest = max(tidcs)
+        if earliest != latest:
+            return False
+        elif any(ti < earliest for ti in locked_tidcs):
+            return False
+        else:
+            return True
+
+    @add_to('GaussianWhiteNoise')
+    def get_summary(self, hists=None):
+        summary = SimpleNamespace()
+        summary.model_name = self.name
+        State = getattr(self, 'State', None)
+        if State:
+            summary.state_vars = list(State.__annotations__)
+        else:
+            summary.state_vars = []
+        if isinstance(self, type):
+            Parameters = getattr(self, 'Parameters', None)
+            if Parameters:
+                summary.params = list(Parameters.__annotations__)
+            else:
+                summary.params = []
+        else:
+            params = getattr(self, 'params', None)
+            if params:
+                summary.params = params.dict()
+            else:
+                summary.params = {}
+        summary.update_functions = self.get_update_summaries(hists)
+        summary.nested_models = list(self.nested_models.values())
+        return summary
+
+    @add_to('GaussianWhiteNoise')
+    def get_update_summaries(self, hists=None) -> Dict[str,str]:
+        """
+        For selected histories, return a string summarizing the update function.
+        By default, the histories summarized are those of `self.state`.
+        May be called on the class itself, or an instance.
+
+        Parameters
+        ----------
+        hists: list | tuple of histories or str
+            List of histories to summarize.
+            For each history given, retrieves its update function.
+            Alternatively, a history's name can be given as a string
+
+        Returns
+        -------
+        Dict[str,str]: {hist name: hist upd code}
+        """
+        # Default for when `hists=None`
+        if hists is None:
+            # >>>> Difference wrt `Model`: No State
+            State = getattr(self, 'State', None)
+            if State:
+                hists = list(self.State.__annotations__.keys())
+            else:
+                hists = []
+            # <<<<
+        # Normalize to all strings; take care that identifiers may differ from the history's name
+        histsdict = {}
+        nonnested_hists = getattr(self, 'nonnested_histories', {})
+        for h in hists:
+            if isinstance(h, History):
+                h_id = None
+                for nm, hist in nonnested_hists.items():
+                    if hist is h:
+                        h_id = nm
+                        break
+                if h_id is None:
+                    continue
+                h_nm = h.name
+            else:
+                assert isinstance(h, str)
+                if h not in self.__annotations__:
+                    continue
+                h_id = h
+                h_nm = h
+            histsdict[h_id] = h_nm
+        hists = histsdict
+        funcs = {pending.hist_nm: pending.upd_fn
+                 for pending in self._pending_update_functions}
+        if not all(isinstance(h, str) for h in hists):
+            raise ValueError(
+                "`hists` must be a list of histories or history names.")
+
+        # For each function, retrieve its source
+        srcs = {}
+        for hist_id, hist_nm in hists.items():
+            fn = funcs.get(hist_id, None)
+            if fn is None:
+                continue
+            src = inspect.getsource(fn)
+            # Check that the source defines a function as expected:
+            # first non-decorator line should start with 'def'
+            for line in src.splitlines():
+                if line.strip()[0] == '@':
+                    continue
+                elif line.strip()[:3] != 'def':
+                    raise RuntimeError(
+                        "Something went wrong when retrieve an update function's source. "
+                        "Make sure the source file is saved and try reloading the Jupyter "
+                        "notebook. Source should start with `def`, but we got:\n" + src)
+                else:
+                    break
+            # TODO: Remove indentation common to all lines
+            if hist_id != hist_nm:
+                hist_desc = f"{hist_id} ({hist_nm})"
+            else:
+                hist_desc = hist_id
+            srcs[hist_desc] = src.split('\n', 1)[1]
+                # 'split' is used to replace the `def` line: callers use
+                # the `hist_desc` value to create a more explicit string
+        return srcs
+
+    @add_to('GaussianWhiteNoise')
+    def summarize(self, hists=None):
+        nested_models = self._model_identifiers
+        if isinstance(self, type):
+            nameline = "Model '{}'".format(self.name)
+            paramline = "Parameters: " + ', '.join(self.Parameters.__annotations__) + "\n"
+            if len(nested_models) == 0:
+                nestedline = ""
+            else:
+                nestedline = "Nested models:\n    " + '\n    '.join(nested_models)
+                nestedline = nestedline + "\n"
+            nested_summaries = []
+        else:
+            # >>>>
+            #assert isinstance(self, Model)
+            assert isinstance(self, BaseModel)  # -> NoiseSource ?
+            # <<<<
+            nameline = str(self)
+            if hasattr(self, 'params'):
+                paramline = f"Parameters: {self.params}\n"
+            else:
+                paramline = "Parameters: None\n"
+            if len(nested_models) == 0:
+                nestedline = ""
+            else:
+                nestedlines = [f"    {attr} -> {type(cls).__name__}"
+                               for attr, cls in self.nested_models.items()]
+                nestedline = "Nested models:\n" + '\n'.join(nestedlines) + "\n"
+            nested_summaries = [model.summarize(hists)
+                                for model in self.nested_models.values()]
+        nameline += '\n' + '-'*len(nameline) + '\n'  # Add separating line under name
+        # >>>> Difference wrt `Model`: No State
+        State = getattr(self, 'State', None)
+        if State:
+            stateline = "State variables: " + ', '.join(State.__annotations__)
+            stateline = stateline + "\n"
+        else:
+            stateline = ""
+        # <<<<
+        summary = (nameline + stateline + paramline + nestedline
+                   + '\n' + self.summarize_updates(hists))
+        return '\n'.join((summary, *nested_summaries))
+
+    @add_to('GaussianWhiteNoise')
+    def get_tidx(self, t, allow_rounding=False):
+        # Copied from History.get_tidx
+        if self.time.is_compatible_value(t):
+            return self.time.index(t, allow_rounding=allow_rounding)
+        else:
+            # assert self.time.is_compatible_index(t)
+            assert shim.istype(t, 'int')
+            if (isinstance(t, sinn.axis.AbstractAxisIndexDelta)
+                and not isinstance(t, sinn.axis.AbstractAxisIndex)):
+                raise TypeError(
+                    "Attempted to get the absolute time index corresponding to "
+                    f"{t}, but it is an index delta.")
+            return self.time.Index(t)
+
+    def index_interval(self, Δt, allow_rounding=False):
+        return self.time.index_interval(value, value2,
+                                        allow_rounding=allow_rounding,
+                                        cast=cast)
+
+    def get_time(self, t):
+        # Copied from History
+        # NOTE: Copy changes to this function in Model.get_time()
+        # TODO: Is it OK to enforce single precision ?
+        if shim.istype(t, 'int'):
+            # Either we have a bare int, or an AxisIndex
+            if isinstance(t, sinn.axis.AbstractAxisIndex):
+                t = t.convert(self.time)
+            elif isinstance(t, sinn.axis.AbstractAxisIndexDelta):
+                raise TypeError(f"Can't retrieve the time corresponding to {t}: "
+                                "it's a relative, not absolute, time index.")
+            return self.time[t]
+        else:
+            assert self.time.is_compatible_value(t)
+            # `t` is already a time value -> just return it
+            return t
+
     @add_to('GaussianWhiteNoise')
     def lock(self):
         for hist in self.history_set:
             hist.lock()
-    
+
     @add_to('GaussianWhiteNoise')
     def clear(self,after=None):
         shim.reset_updates()
@@ -317,11 +623,11 @@ class GaussianWhiteNoise(BaseModel):
     def eval(self, max_cost :Optional[int]=None, if_too_costly :str='raise'):
         for h in self.history_set:
             h.eval(max_cost, if_too_costly)
-    
-    
+
+
     ## Copied from sinnfull.base.Model
     _compiled_functions: dict=PrivateAttr(default_factory=lambda: {})
-        
+
     @add_to('GaussianWhiteNoise')
     def stationary_stats(
         self,
@@ -409,7 +715,7 @@ class GaussianWhiteNoise(BaseModel):
     def _stationary_stats(self, params: ModelParams):
         return {'ξ': {'mean': params.μ,
                       'std': shim.exp(params.logσ)/shim.sqrt(self.dt)}}
-    
+
     @add_to('GaussianWhiteNoise')
     def stationary_dist(self, params: ModelParams):
         stats = cls.stationary_stats(params)
@@ -456,6 +762,9 @@ class GaussianWhiteNoise(BaseModel):
         return Θ
 
 # %% tags=["remove-cell"]
+Model.register(GaussianWhiteNoise)
+from mackelab_toolbox import iotools
+iotools.register_datatype(GaussianWhiteNoise)  # TODO: Do in NoiseSource; c.f. Models.__init_subclass__
 GaussianWhiteNoise.update_forward_refs()  # Always safe to do this & sometimes required
 
 # %% [markdown]
@@ -467,12 +776,12 @@ if __name__ == "__main__":
     from scipy import stats
     import holoviews as hv
     hv.extension('bokeh')
-    
+
     time = TimeAxis(min=0, max=10, step=2**-6, unit=sinnfull.ureg.s)
     Θ = GaussianWhiteNoise.get_test_parameters(rng=123)
     noise = GaussianWhiteNoise(time=time, params=Θ)
     #model.integrate(upto='end')
-    
+
 
     # %%
     noise.integrate(upto='end')

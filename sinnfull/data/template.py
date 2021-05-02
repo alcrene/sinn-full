@@ -15,12 +15,12 @@
 # Quick Implementation overview
 # -----------------------------
 #
-# `DataAccessor.load`  
+# `DataAccessor.load`
 # ~  Definiton of the data format
 #
-# `Trial`  
-# ~ Definition of trial metadata  
-# ~ Definition of trial ID data (subset of metadata)  
+# `Trial`
+# ~ Definition of trial metadata
+# ~ Definition of trial ID data (subset of metadata)
 # ~ Conversion of file names to and from trial data
 #
 #
@@ -32,8 +32,8 @@
 # general metadata information. The file name searched for is determined by the
 # module variable `data_format_re`.
 #
-# :::{admonition} Missing template values  
-# :class: important  
+# :::{admonition} Missing template values
+# :class: important
 # The template code below uses markers `>>>>>>>>>>` and `<<<<<<<<<<` to indicate sections which must be updated.
 # :::
 
@@ -130,9 +130,9 @@ class Trial(BaseTrial):
 
     # >>>>>>>> datadir & keynames
     # > `datadir` MUST be defined for on-disk data sets.
-    # > `keynames` defines which attributes uniquely define a Trial.
+    # > `keynames` determines which attributes uniquely define a Trial.
     datadir :str
-    keynames:ClassVar = ('subject', 'date', 'session')
+    keynames:ClassVar[Tuple[str,str,str]] = ('subject', 'date', 'session')
         # >>>>>> Change key names to the trial attributes defined above.
 
     # The following defaults are used ONLY when one of the ALTERNATIVE Trial
@@ -140,7 +140,7 @@ class Trial(BaseTrial):
     # attributes remain REQUIRED
     default_kwargs = {"datadir": ""}
 
-    # These regexes are used to parse file names; they invert __str__.
+    # These regexes are used to parse file names; they invert `__str__(self)`.
     # The pattern for subject is just an example
     # >>>>>>>>> Add patterns associated to data keys
     _re_patterns = dict(

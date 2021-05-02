@@ -11,6 +11,8 @@ import mackelab_toolbox.serialize as mtbserialize
 import smttask.typing
 
 from .data import DataAccessor
+from .parameters import ParameterSet
+from .typing_ import IndexableNamespace
 # from .models.base import ObjectiveFunction
 
 # Serialization of functions
@@ -21,8 +23,8 @@ for T, encoder in mtbserialize.json_encoders.items():
 for T, encoder in smttask.typing.json_encoders.items():
     mtbtyping.add_json_encoder(T, encoder)
 # sinnfull-specific json serializers
-
-# Serialization of DataAccessor
+mtbtyping.add_json_encoder(ParameterSet, ParameterSet.json_encoder)
+mtbtyping.add_json_encoder(IndexableNamespace, IndexableNamespace.json_encoder)
 mtbtyping.add_json_encoder(DataAccessor, lambda data: data.to_desc())
 # Serialization of quantities with units
 mtbtyping.load_pint()

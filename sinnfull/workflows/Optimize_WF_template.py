@@ -114,15 +114,15 @@ param_rngkey = 3   # Base key: keys are generator as (param_key, i)
 sim_rngkey = 4     # Base key: keys are generator as (sim_key, i)
 
 # Possible values listed in sinnfull.models.models
-model = 'Ricker'
-observed_hists    =['N']
+model = 'WilsonCowan'
+observed_hists    =['u', 'I']
 latent_hists      =[]
 
 from sinnfull.optim import learning_params
 default_learning_params = learning_params[model].default   # Defined in [projectdir]/sinnfull/optim/paramsets
 
 # Possible values listed in sinnfull.models.objectives
-default_objective = objectives[model].logp_forward
+default_objective = objectives[model].se
 params_objective  = None  # None = use default_objective
 latents_objective = None  # None = use default_objective
 prior = priors[model].default(M=1)

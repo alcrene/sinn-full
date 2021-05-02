@@ -19,9 +19,9 @@
 # %%
 import numpy as np
 import theano_shim as shim
-from mackelab_toolbox.typing import IndexableNamespace
 
 from sinnfull.models.base import ObjectiveFunction, tag
+from sinnfull.typing_ import IndexableNamespace
 
 
 # %% [markdown]
@@ -52,7 +52,7 @@ import theano_shim as shim
 @ObjectiveFunction(tags={'log L'})
 def GWN_logp(self, k):
     "Log probability of the GaussianWhiteNoise model."
-    μ=self.μ; logσ=self.logσ; σ=shim.exp(logσ); 
+    μ=self.μ; logσ=self.logσ; σ=shim.exp(logσ);
     Δt=self.dt; ξ=self.ξ
     norm = -logσ + 0.5*shim.log(Δt)
     gauss = - (ξ(k)-μ)**2 * shim.sqrt(Δt) / (2*σ)

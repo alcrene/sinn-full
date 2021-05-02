@@ -66,71 +66,71 @@ else:
     #             learn_params[nm] = shim.shared(val)
     #     return learn_params
 
-    def apply_sgd_masks(*paramsets: Tuple[ModelParams, dict],
-                        on_non_shared_param: str='fit',
-                        str_keys: bool=True):
-        """
-        For each passed pair of (parameters,mask), extract the parameter
-        components for which the corresponding mask is True.
-
-        Parameters
-        ----------
-        *paramsets (parameters, masks) pairs.
-            `parameters` should be instance of a Model.Parameters.
-            `mask` is a dictionary of 'param name': bool (or Array[bool]).
-            The param names in `mask` must occur within `parameters`.
-        on_non_shared_param: 'fit' | 'raise' | 'warn' | 'ignore'
-            What to do if some parameters are not shared variables ?
-            (Those model parameters which are not shared vars cannot be optimized.)
-            Default is to save a mask regardless; this is appropriate when
-            the paramset is the initialization vector, rather than the model
-            parameters themselves.
-            Requires `str_keys` to be ``True``.
-            'raise', 'warn' and 'ignore' will all skip application of the mask
-            for non-shared parameters; this is appropriate when the model is
-            already in memory, and `paramset` is a `ModelParams` instance.
-        str_keys: bool
-            ``True``: Before returning the dictionary, shared variables are
-            replaced by their attribute name in the param_set
-
-        :returns: dict {param: mask}
-            `param` is either a string or shared variable,
-            `mask` a bool or Array[bool]
-        """
-        Θ = {}  # Flattened vector of parameters to optimize
-        non_shared_θ = {}  # Should remain empty; raises TypeError otherwise
-        if not str_keys and on_non_shared_param == 'fit':
-            raise ValueError("When `on_non_shared_param` = 'fit', then "
-                             "`str_keys` must be True.")
-        for θ_set in paramsets:
-            if isinstance(θ_set, tuple):
-                θ_set, masks = θ_set
-            else:
-                # Default to fitting everything
-                masks = {θ: True for θ in θ_set}
-            for nm, mask in masks.items():
-                θ = getattr(θ_set, nm)
-                if mask is not False:
-                    if not shim.isshared(θ) and on_non_shared_param != 'fit':
-                        non_shared_θ[nm] = θ
-                    elif str_keys:
-                        Θ[nm] = mask
-                    else:
-                        assert shim.isshared(θ)
-                        Θ[θ] = mask
-        if non_shared_θ:
-            msg = ("You asked to optimize the following values, but they are "
-                   f"not shared variables:\n{non_shared_θ}")
-            if on_non_shared_param == 'ignore':
-                pass
-            elif on_non_shared_param == 'warn':
-                warn(msg)
-            else:
-                raise TypeError(msg)
-        if len(Θ) == 0:
-            warn("`apply_sgd_masks` returned an empty dict. No parameter will "
-                 "be optimized.")
-        return Θ
+    # def apply_sgd_masks(*paramsets: Tuple[ModelParams, dict],
+    #                     on_non_shared_param: str='fit',
+    #                     str_keys: bool=True):
+    #     """
+    #     For each passed pair of (parameters,mask), extract the parameter
+    #     components for which the corresponding mask is True.
+    #
+    #     Parameters
+    #     ----------
+    #     *paramsets (parameters, masks) pairs.
+    #         `parameters` should be instance of a Model.Parameters.
+    #         `mask` is a dictionary of 'param name': bool (or Array[bool]).
+    #         The param names in `mask` must occur within `parameters`.
+    #     on_non_shared_param: 'fit' | 'raise' | 'warn' | 'ignore'
+    #         What to do if some parameters are not shared variables ?
+    #         (Those model parameters which are not shared vars cannot be optimized.)
+    #         Default is to save a mask regardless; this is appropriate when
+    #         the paramset is the initialization vector, rather than the model
+    #         parameters themselves.
+    #         Requires `str_keys` to be ``True``.
+    #         'raise', 'warn' and 'ignore' will all skip application of the mask
+    #         for non-shared parameters; this is appropriate when the model is
+    #         already in memory, and `paramset` is a `ModelParams` instance.
+    #     str_keys: bool
+    #         ``True``: Before returning the dictionary, shared variables are
+    #         replaced by their attribute name in the param_set
+    #
+    #     :returns: dict {param: mask}
+    #         `param` is either a string or shared variable,
+    #         `mask` a bool or Array[bool]
+    #     """
+    #     Θ = {}  # Flattened vector of parameters to optimize
+    #     non_shared_θ = {}  # Should remain empty; raises TypeError otherwise
+    #     if not str_keys and on_non_shared_param == 'fit':
+    #         raise ValueError("When `on_non_shared_param` = 'fit', then "
+    #                          "`str_keys` must be True.")
+    #     for θ_set in paramsets:
+    #         if isinstance(θ_set, tuple):
+    #             θ_set, masks = θ_set
+    #         else:
+    #             # Default to fitting everything
+    #             masks = {θ: True for θ in θ_set}
+    #         for nm, mask in masks.items():
+    #             θ = getattr(θ_set, nm)
+    #             if mask is not False:
+    #                 if not shim.isshared(θ) and on_non_shared_param != 'fit':
+    #                     non_shared_θ[nm] = θ
+    #                 elif str_keys:
+    #                     Θ[nm] = mask
+    #                 else:
+    #                     assert shim.isshared(θ)
+    #                     Θ[θ] = mask
+    #     if non_shared_θ:
+    #         msg = ("You asked to optimize the following values, but they are "
+    #                f"not shared variables:\n{non_shared_θ}")
+    #         if on_non_shared_param == 'ignore':
+    #             pass
+    #         elif on_non_shared_param == 'warn':
+    #             warn(msg)
+    #         else:
+    #             raise TypeError(msg)
+    #     if len(Θ) == 0:
+    #         warn("`apply_sgd_masks` returned an empty dict. No parameter will "
+    #              "be optimized.")
+    #     return Θ
 
     #TODO: Generalize accept quantities units as well, and move to mackelab_toolbox.units.
     def to_ref_units(value, ref_units: dict):
@@ -275,3 +275,27 @@ else:
             # arrays, and different dict hierarchies (Sumatra's _dict_diff
             # fails on {'a': {'b': 1}} vs {'a': 1}
             return mackelab_toolbox.parameters._dict_diff(self, other)
+
+        def __getattr__(self, attr):
+            if hasattr(_parameters.ParameterSet, '__getattr__'):
+                try:
+                    return super().__getattr__(attr)
+                except AttributeError:
+                    pass
+            if attr != '_tags' and attr in getattr(self, '_tags', set()):
+                return self
+            else:
+                raise AttributeError(
+                    f"'{attr}' was not found in the Parameterset")
+
+        @classmethod
+        def json_encoder(cls, value):
+            # Remove '_tags' entries at all levels, as well as referenecs to
+            # 'self' added by TaggedCollection.
+            # We cast to ParameterSet to recreate the hierarchy from dotted
+            # key names, and then convert to a plain dict to avoid calling
+            # this encoder in an infinite loop.
+            return ParameterSet(
+                dict((k,v) for k,v in pset.flat()
+                if not k.endswith('_tags'))
+                ).as_dict()

@@ -25,7 +25,7 @@ if __name__ == "__main__":
 # %% tags=["remove-input"]
 import numpy as np
 import pymc3 as pm
-from sinnfull.models.base import tag, Prior
+from sinnfull.models.base import tag, Prior, PriorFactory
 if __name__ == "__main__":
     from IPython.display import display
     from sinnfull.models._utils import truncated_histogram, sample_prior
@@ -47,6 +47,7 @@ if __name__ == "__main__":
 @tag('OU_AR', 'OU_FiniteNoise')  # Both forms of tagging
 @tag.default                     # are equivalent
 @tag.dale
+@PriorFactory
 def OU_DalePrior(M: int, Mtilde):
     with Prior() as prior:
         assert M % 2 == 0                   

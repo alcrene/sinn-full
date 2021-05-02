@@ -47,10 +47,11 @@ from pydantic.typing import ClassVar
 import pydantic.parse
 
 from sinnfull.parameters import ParameterSet
+from sinnfull.typing_ import IndexableNamespace
 
 import mackelab_toolbox as mtb
 import mackelab_toolbox.iotools
-from mackelab_toolbox.typing import IndexableNamespace, Array
+from mackelab_toolbox.typing import Array
 import mackelab_toolbox.utils
 
 # %% [markdown]
@@ -64,14 +65,14 @@ from sinn.models import Model, ModelParams
 from sinnfull.data.base import DataAccessor as BaseAccessor, Trial as BaseTrial
 import sinnfull.utils as utils
 
-class Trial(BaseTrial):
+class SyntheticTrial(BaseTrial):
     # Inherited from BaseTrial:
     # - Config: extra='forbid'
     # - __hash__
     params   : IndexableNamespace
     init_cond: IndexableNamespace
     seed     : int
-    keynames : ClassVar=('Θ_hash', 'ic_hash', 'seed')
+    keynames : ClassVar[Tuple[str,str,str]]=('Θ_hash', 'ic_hash', 'seed')
 
     @validator('params', 'init_cond', pre=True)
     def fix_params(cls, ns):
@@ -157,7 +158,7 @@ class SyntheticDataAccessor(BaseAccessor):
     history in the model.
     """
     metadata_filename = None
-    Trial = Trial
+    Trial = SyntheticTrial
 
     def __init__(self,
                  sumatra_project,
@@ -246,10 +247,10 @@ class SyntheticDataAccessor(BaseAccessor):
         if len(param_sets) != len(seeds):
             raise ValueError("Synthetic DataAccessor: `param_sets` and `seeds` "
                              "must have the same length.")
-        trial_list = [Trial(params=Θ, init_cond=ic, model=self.model, seed=seed)
+        trial_list = [self.Trial(params=Θ, init_cond=ic, model=self.model, seed=seed)
                       for Θ, ic, seed in zip(param_sets, init_conds, seeds)]
         index_tuples = [trial.key for trial in trial_list]
-        index = pd.MultiIndex.from_tuples(index_tuples, names=Trial.keynames)
+        index = pd.MultiIndex.from_tuples(index_tuples, names=self.Trial.keynames)
         trials = pd.DataFrame(
             [(trial.filename, trial) for trial in trial_list],
             index=index,
@@ -270,7 +271,7 @@ class SyntheticDataAccessor(BaseAccessor):
             # if trial.key not in self.trials:
             #     raise ValueError("Parameters do not match those of any defined trial.")
         else:
-            assert isinstance(trial, Trial)
+            assert isinstance(trial, self.Trial)
         return trial
 
     @lru_cache(maxsize=4)  # 4 is a wild guess

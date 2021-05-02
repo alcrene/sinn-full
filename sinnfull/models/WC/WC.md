@@ -177,11 +177,9 @@ Wilson-Cowan model driven by Gaussian white noise.
 :tags: [hide-input, remove-output]
 
 if __name__ == "__main__":
-    from sinn.histories import Series, HistoryUpdateFunction
-    from sinn.models import TimeAxis
     from sinnfull.models import paramsets
     from sinnfull.models.GWN.GWN import GaussianWhiteNoise
-    from sinnfull.rng import get_np_rng, get_shim_rng
+    from sinnfull.rng import get_shim_rng
     from IPython.display import display
     import holoviews as hv
     hv.extension('bokeh')

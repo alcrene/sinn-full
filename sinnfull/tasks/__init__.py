@@ -1,2 +1,2 @@
-from base import *
-from analysis import *
+from .base import *
+from .analysis import *

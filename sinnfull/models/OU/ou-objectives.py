@@ -25,9 +25,9 @@ if __name__ == "__main__":
 # %% tags=["hide-input"]
 import numpy as np
 import theano_shim as shim
-from mackelab_toolbox.typing import IndexableNamespace
 
 from sinnfull.models.base import ObjectiveFunction, tag
+from sinnfull.typing_ import IndexableNamespace
 # from sinnfull.tags import TagDecorator
 
 # %% [markdown]

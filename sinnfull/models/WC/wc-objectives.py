@@ -19,9 +19,9 @@
 # %%
 import numpy as np
 import theano_shim as shim
-from mackelab_toolbox.typing import IndexableNamespace
 
 from sinnfull.models.base import ObjectiveFunction, tag
+from sinnfull.typing_ import IndexableNamespace
 
 
 # %% [markdown]
@@ -44,7 +44,7 @@ import theano_shim as shim
 
 # %%
 @tag.WilsonCowan
-@ObjectiveFunction(tags={'se'})
+@ObjectiveFunction(tags={'se', 'forward'})
 def WC_se(self, k):
     "Squared error loss"
     u_predict = self.u_upd(self, k)

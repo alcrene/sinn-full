@@ -28,7 +28,7 @@ if __name__ == "__main__":
 # %% tags=["hide-input"]
 import numpy as np
 import pymc3 as pm
-from sinnfull.models.base import tag, Prior
+from sinnfull.models.base import tag, Prior, PriorFactory
 import theano_shim as shim
 if __name__ == "__main__":
     from IPython.display import display
@@ -46,6 +46,7 @@ if __name__ == "__main__":
 
 # %%
 @tag.default
+@PriorFactory
 def GWN_Prior(M:int, mu_mean=0., mu_std=1., logsigma_mean=0., logsigma_std=1.):
     with Prior() as prior:
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
@@ -69,6 +70,7 @@ if __name__ == "__main__":
 
 # %%
 @tag.zero_mean
+@PriorFactory
 def GWN_ZeroMeanPrior(M:int, logsigma_mean=0., logsigma_std=1.):
     with Prior() as prior:
         pm.Deterministic('M', shim.constant(M, dtype='int16'))

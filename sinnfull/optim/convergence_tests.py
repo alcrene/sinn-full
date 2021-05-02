@@ -44,9 +44,11 @@ from pydantic import BaseModel, conint, PositiveFloat
 from sinn.utils.pydantic import initializer
 
 # %%
-from sinnfull.optim.common import OptimizerStatus
+from sinnfull.optim.base import OptimizerStatus
 from sinnfull.optim.recorders import Recorder
 
+# %%
+__all__ = ["ConvergenceTest", "DivergingCost", "ConstantCost"]
 
 # %% [markdown]
 # ## Base class

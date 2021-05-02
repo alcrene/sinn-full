@@ -183,8 +183,8 @@ class AlternatedSGD(Optimizer):
     # DEPRECATION: Everything with 'nodyn' should probably be deprecated
     logp_default_nodyn : Optional[Callable[[Integral], FloatX]]=None
     logp_latents_nodyn : Callable[[Integral, Integral], Tuple[List[FloatX],dict]]
-    recorders          : Dict[str,Recorder]=PrivateAttr(default_factory=lambda:{})
-        # recorders attribute will be deprecated
+    _recorders          : Dict[str,Recorder]=PrivateAttr(default_factory=lambda:{})
+        # _recorders attribute will be deprecated
     # TODO: Also move convergence tests to the task
     convergence_tests  : List[ConvergenceTest]=[]
 
@@ -417,7 +417,7 @@ class AlternatedSGD(Optimizer):
                            "to an optimizer is not necessary: simply call the "
                            "recorder within the same loop which calls `step()`.")
         recorders_dict = (self.diagnostic_recorders if isinstance(recorder, DiagnosticRecorder)
-                          else self.recorders)
+                          else self._recorders)
         if recorder.name in recorders_dict:
             raise ValueError(f"A recorder with the name '{recorder.name}' "
                              "is already attached to this optimizer.")
@@ -425,10 +425,10 @@ class AlternatedSGD(Optimizer):
 
     # TODO: Rename to 'pop_recorder' ?
     def remove_recorder(self, recorder: Union[Recorder, str]):
-        recorders_dict = self.recorders
+        recorders_dict = self._recorders
         recorder_name = recorder if isinstance(recorder, str) else recorder.name
-        if recorder.name in self.recorders:
-            return self.recorders.pop(recorder.name)
+        if recorder.name in self._recorders:
+            return self._recorders.pop(recorder.name)
         elif recorder.name in self.diagnostic_recorders:
             return self.diagnostic_recorders.pop(recorder.name)
         else:
@@ -438,8 +438,8 @@ class AlternatedSGD(Optimizer):
 
     def remove_recorders(self):
         """Remove all recorders and return them as a dictionary."""
-        recorders = {**self.recorders, **self.diagnostic_recorders}  # Makes shallow copies
-        self.recorders.clear()
+        recorders = {**self._recorders, **self.diagnostic_recorders}  # Makes shallow copies
+        self._recorders.clear()
         self.diagnostic_recorders.clear()
         return recorders
 
@@ -553,7 +553,7 @@ class AlternatedSGD(Optimizer):
 # ::::
 
     # %%
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def draw_data_segment(self):
         """
         Draw the next data segment from `self.data_segment`.
@@ -633,7 +633,7 @@ class AlternatedSGD(Optimizer):
 
         return segmentkey
 
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def step(self, update_params=True, update_latents=True):
         if (self.status & OptimizerStatus.Converged) is OptimizerStatus.Converged:
             # Bitwise & will match both 'Converged' and 'Failed'
@@ -727,17 +727,17 @@ class AlternatedSGD(Optimizer):
             self.status |= convergence_test(self)
 
     # TODO: Deprecate record
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def record(self, force=True):
         """It is presumed that if a user uses `record` in their own code, they
         expect it to record unconditionnally. There the default is `force=True`
         """
-        for recorder in self.recorders.values():
+        for recorder in self._recorders.values():
             if force or recorder.ready(self.stepi):
                 recorder.record(self.stepi, self)
 
     # TODO?: Also deprecate record_diagnostics ?
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def record_diagnostics(self, batch_start, context, force=True):
         for recorder in self.diagnostic_recorders.values():
             if force or recorder.ready(self.stepi, batch_start, context):
@@ -758,7 +758,7 @@ class AlternatedSGD(Optimizer):
 # Each compiled function both computes the appropriate gradient, and updates the values of the parameters or latent values accordingly.
 
     # %%
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def compile_optimization_functions(
         self,
         initializer: Optional[str]=None,
@@ -831,7 +831,7 @@ class AlternatedSGD(Optimizer):
 # 4. Lock the histories corresponding to observations.
 
     # %%
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def prepare_optimizer_compilation(self):
         """
         Do the following:
@@ -856,7 +856,7 @@ class AlternatedSGD(Optimizer):
             if h.cur_tidx > model_tidx or h.cur_tidx < model_tidx:
                 # < and > comparators account for padding,
                 raise RuntimeError(
-                    "SGDOptimizer: Latent history is not synchronized with the model.\n"
+                    "AlternatedSGD: Latent history is not synchronized with the model.\n"
                     f"History {h.name} curtidx: {h.cur_tidx}\n"
                     f"Model {self.model.name} curtidx: {model_tidx}")
 
@@ -871,10 +871,10 @@ class AlternatedSGD(Optimizer):
         for h in intermediate_hists:
             if h.locked:
                 raise RuntimeError(
-                    f"SGDOptimizer: History {h.name} is locked, but not listed as observed.")
+                    f"AlternatedSGD: History {h.name} is locked, but not listed as observed.")
             if h.cur_tidx > model_tidx:
                 raise RuntimeError(
-                    "SGDOptimizer: Intermediate history is not synchronized with the model.\n"
+                    "AlternatedSGD: Intermediate history is not synchronized with the model.\n"
                     f"History {h.name} curtidx: {h.cur_tidx}\n"
                     f"Model {self.model.name} curtidx: {model_tidx}")
 
@@ -966,41 +966,41 @@ class AlternatedSGD(Optimizer):
         self._k_vars.Kηb_symb = shim.tensor(self.Kηb.plain)
         self._k_vars.Kηr_symb = shim.tensor(self.Kηr.plain)
 
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def k(self):
         return self._k_vars.k
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Kθb(self):
         return self._k_vars.Kθb
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Kθr(self):
         return self._k_vars.Kθr
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Kθb_symb(self):
         return self._k_vars.Kθb_symb
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Kθr_symb(self):
         return self._k_vars.Kθr_symb
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Kηb(self):
         return self._k_vars.Kηb
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Kηr(self):
         return self._k_vars.Kηr
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Kηb_symb(self):
         return self._k_vars.Kηb_symb
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Kηr_symb(self):
         return self._k_vars.Kηr_symb
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Nθb(self):
         return self.fit_hyperparams['Nθb']
-    @add_property_to('SGDOptimizer')
+    @add_property_to('AlternatedSGD')
     def Nηb(self):
         return self.fit_hyperparams['Nηb']
 
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def cleanup_optimizer_compilation(self):
         """
         Do the following:
@@ -1043,11 +1043,11 @@ class AlternatedSGD(Optimizer):
 #    6. Flush the global symbolic updates.
 #       - These were created when evaluating `forward_logp`, and should be kept until the final function is compiled.
 #
-# Compiled function: ``SGDOptimizer.update_θ``$(k, K^θ_b, K^θ_r)$.
+# Compiled function: ``AlternatedSGD.update_θ``$(k, K^θ_b, K^θ_r)$.
 
     # %%
     ## Compile the parameter update function ##
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def compile_parameter_optimizer(self):
 
         if shim.pending_updates():
@@ -1125,7 +1125,7 @@ class AlternatedSGD(Optimizer):
             # Typically the forward accumulator is offset by 1; shift k0 accordingly
             if not hasattr(self.logp_params, 'start_offset'):
                 raise AttributeError(
-                    "The `logp_params` argument to SGDOptimizer does not seem "
+                    "The `logp_params` argument to AlternatedSGD does not seem "
                     "to have been created with the `sinn.models.Model.accumulate` "
                     "decorator.")
             k0 -= self.logp_params.start_offset
@@ -1150,7 +1150,7 @@ class AlternatedSGD(Optimizer):
         #### Flush symbolic updates ####
         self.model.theano_reset()
 
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def default_param_optimizer(self, cost, parxams, λθ, **kwargs):
         """
         Simply calls the mackelab_toolbox.optimizers.Adam optimizer.
@@ -1181,11 +1181,11 @@ class AlternatedSGD(Optimizer):
 #    6. Compile the three update functions.
 #    7. As before, finish by flushing the global symbolic updates.
 #
-# Compiled function: ``SGDOptimizer.update_η``$(k, K^η_b, K^η_r)$.
+# Compiled function: ``AlternatedSGD.update_η``$(k, K^η_b, K^η_r)$.
 
     # %%
     ## Compile latent update function ##
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def compile_latent_optimizers(self):
 
         if shim.pending_updates():
@@ -1277,7 +1277,7 @@ class AlternatedSGD(Optimizer):
         #### Flush global symbolic updates ####
         self.model.theano_reset()
 
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def default_latent_optimizer(self, cost, cost_with_init, cost_without_dyn,
                                  λη: Union[FloatX,dict], clip: Optional[float]=None):
         """
@@ -1404,7 +1404,7 @@ class AlternatedSGD(Optimizer):
 
         return latent_updates
 
-    @add_to('SGDOptimizer')
+    @add_to('AlternatedSGD')
     def full_trace_latent_optimizer(self, cost, cost_with_init, cost_without_dyn,
                                     λη: Union[FloatX,dict], clip: Optional[float]=None):
 
@@ -1453,4 +1453,4 @@ class AlternatedSGD(Optimizer):
         return latent_updates
 
 # %% tags=["remove-cell"]
-SGDOptimizer.update_forward_refs()
+AlternatedSGD.update_forward_refs()

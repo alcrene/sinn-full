@@ -65,13 +65,13 @@ class TaggedCollection(list):
         dups = {}
         for x,tags in self:
             if id(x) in seen:
-                if id(x) not in dup_ids:
-                    dup_ids[id(x)] = [seen[id(x)][1], tags]
+                if id(x) not in dups:
+                    dups[id(x)] = [seen[id(x)][1], tags]
                 else:
-                    dup_ids[id(x)].append(tags)
+                    dups[id(x)].append(tags)
             else:
                 seen[id(x)] = (x,tags)
-        invalid_dups = [(seen[xid][0],tag_sets) for xid,tag_sets in dups
+        invalid_dups = [(seen[xid][0],tag_sets) for xid,tag_sets in dups.items()
                         if any(tag_set != tag_sets[0] for tag_set in tag_sets)]
         if invalid_dups:
             raise ValueError("Multiple sets of tags were specified for the "
@@ -125,15 +125,20 @@ class TaggedCollection(list):
             # overspecifying tags does not cause an error.
             # Attributes simply point back to the object, so that indexing
             # redundant tags is a noop
-            if result.tags:
-                for tag in result.tags:
-                    if not hasattr(res, tag):  # Don't overwrite existing attributes
-                        try:
-                            setattr(res, tag, res)
-                        except Exception:
-                            # This is just a hacky convenience.
-                            # If it fails for any reason, continue.
-                            continue
+            # if result.tags:
+            #     for tag in result.tags:
+            #         if hasattr(res, '_selfrefs'):
+            #             # `res` provides a dictionary for self-references;
+            #             # use that to store the additional tags.
+            #             # (self-references are used as fallbacks for __getattr__)
+            #             res._selfrefs.add(tag)
+            #         # if not hasattr(res, tag):  # Don't overwrite existing attributes
+            #         #     try:
+            #         #         setattr(res, tag, res)
+            #         #     except Exception:
+            #         #         # This is just a hacky convenience.
+            #         #         # If it fails for any reason, continue.
+            #         #         continue
             return res
         elif self._squeeze and len(result.tags) == 0:
             return result.values

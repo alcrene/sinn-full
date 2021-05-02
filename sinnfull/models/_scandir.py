@@ -53,6 +53,8 @@ def add_pset(pset, extra_tags=frozenset()):
     h = stabledigest(pset)
     paramsets[h] = pset
     pset_tags[h] = pset_tags.get(h, set()).union(tags)
+    # Add _tags back, to allow overspecifying tag filters
+    pset._tags = pset_tags[h]
 
 def get_objs_from_namespace(model_name, ns):
     for nm, o in ns.__dict__.items():

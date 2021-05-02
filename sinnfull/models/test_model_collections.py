@@ -84,7 +84,7 @@ objectives[{'forward', 'OU_AR'}]   # to the one above
 
 # %% [markdown]
 # One can always fall back to indexing the underlying list with integers.
-# However, the ordering of this list is fragile since it depends on module import order.
+# However the ordering of this list is fragile since it depends on module import order.
 
 # %%
 objectives['forward'].OU_AR[0]

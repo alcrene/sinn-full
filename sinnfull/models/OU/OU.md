@@ -38,7 +38,7 @@ import pymc3 as pm
 from pydantic import validator
 import theano_shim as shim
 from mackelab_toolbox.typing import (
-    Array, FloatX, Shared, Tensor, IndexableNamespace, AnyRNG, RNGenerator)
+    Array, FloatX, Shared, Tensor, AnyRNG, RNGenerator)
 
 from sinn.models import  ModelParams, updatefunction, initializer
 from sinn.histories import TimeAxis, Series, AutoHist
@@ -46,6 +46,7 @@ from sinn.utils import unlocked_hists
 
 from sinnfull.utils import add_to
 from sinnfull.models.base import Model, Param, tag
+from sinnfull.typing_ import IndexableNamespace
 ```
 
 ```{code-cell} ipython3
@@ -95,9 +96,9 @@ This parameterization is Markovian: the distribution of $I_k$ depends only on $I
 I_k &= \tilde{W} \tilde{I}_k
 \end{align}
 
-:::{margin} Code  
-`OU_AR`: Parameters  
-`OU_AR`: Dynamical equations  
+:::{margin} Code
+`OU_AR`: Parameters
+`OU_AR`: Dynamical equations
 :::
 
 ```{code-cell} ipython3

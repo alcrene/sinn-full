@@ -26,7 +26,7 @@ if __name__ == "__main__":
 import numpy as np
 import pymc3 as pm
 import theano_shim as shim
-from sinnfull.models.base import tag, Prior
+from sinnfull.models.base import tag, Prior, PriorFactory
 if __name__ == "__main__":
     from IPython.display import display
     from sinnfull.models._utils import truncated_histogram, sample_prior
@@ -44,6 +44,7 @@ if __name__ == "__main__":
 # Based on the parameters used in Rich et al. (Scientific Reports, 2019).
 
 @tag.rich
+@PriorFactory
 def WC_RichPrior(M:int):
     with Prior() as prior:
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
@@ -77,6 +78,7 @@ if __name__ == "__main__":
 # Prior with values that are all near unity. Values are otherwise arbitrary.
 
 @tag.zero_mean
+@PriorFactory
 def WC_Default(M:int):
     with Prior() as prior:
         pm.Deterministic('M', shim.constant(M, dtype='int16'))

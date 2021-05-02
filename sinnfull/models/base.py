@@ -18,6 +18,8 @@
 #
 # Defines:
 #
+# - [`Param`](#param-type)
+# - [`Model`](#models)
 # - [`Prior`](#prior)
 # - [`ObjectiveFunction`](#objectivefunction)
 
@@ -46,11 +48,12 @@ from sinn.utils.pydantic import add_exclude_mask
 from sinn.models import ModelParams
 
 import mackelab_toolbox.typing as mtbtyping
-from mackelab_toolbox.typing import IndexableNamespace, Array, Shared
+from mackelab_toolbox.typing import Array, Shared
 from mackelab_toolbox.pymc_typing import PyMC_Model, PyMC_RV
 
 from sinnfull.utils import TypeDict, add_to
 from sinnfull.parameters import ParameterSet
+from sinnfull.typing_ import IndexableNamespace
 from sinnfull.rng import get_seedsequence
 from sinnfull.tags import TagDecorator
 
@@ -77,7 +80,6 @@ class ParamMeta:
             return Union[Shared[key], PyMC_RV]
 Param=ParamMeta()
 
-
 # %% [markdown]
 # ## Models
 #
@@ -101,8 +103,24 @@ Param=ParamMeta()
 # `Model`: Stationary distribution
 # :::
 
+# %% tags=["remove-cell"]
+from sinn.models import ModelMetaclass as BaseModelMetaclass
+class ModelMetaclass(BaseModelMetaclass):
+    def __getattr__(cls, attr):
+        if hasattr(sinn.Model, '__getattr__'):
+            try:
+                return sinn.Model.__getattr__(cls, attr)
+            except AttributeError:
+                pass
+        if attr != '_tags' and attr in getattr(cls, '_tags', set()):
+            return cls
+        else:
+            raise AttributeError(f"{cls} does not define "
+                                 f"the attribute '{attr}'.")
+
+
 # %% tags=["hide-input"]
-class Model(sinn.Model):
+class Model(sinn.Model, metaclass=ModelMetaclass):
     _compiled_functions: dict=PrivateAttr(default_factory=lambda: {})
 
     # Subclasses may use instance methods if necessary
@@ -331,6 +349,7 @@ class Prior(PyMC_Model):
                <--------------            <---------
                 Deterministics             backward
     """
+           
     def no_observed_RVs(self):
         if self.observed_RVs:
             raise RuntimeError("A prior should not contain any observed RVs.\n"
@@ -663,16 +682,34 @@ class Prior(PyMC_Model):
             assert all(v not in rv_list for v in shim.graph.symbolic_inputs(logpt))
         return logpt
 
+# %% [markdown]
+# The `@PriorFunction` decorator is used to indicate that a function returns an instance of `Prior`.
+
+# %%
+class PriorFactory:
+    def __init__(self, f):
+        self.f = f
+        self._tags = set()
+    def __getattr__(self, attr):
+        if attr in self._tags:
+            return self
+        else:
+            raise AttributeError(
+                f"PriorFunction does not recognized the attribute '{attr}'.")
+    def __call__(self, *args, **kwargs):
+        return self.f(*args, **kwargs)
+
+
 # %% [markdown] tags=["remove-cell"]
 # PROBLEM: Serializing PureFunction includes the decorator(s). However,
 #   we don't want to include the @ObjectiveFunction decorator (tags are
-#   already stored, and could differ from those in the decorator?)
+#   already stored, and could differ from those in the decorator?)  
 # SOLUTION/HACK: Create a new PureFunction type, which wraps the json_encoder
-#   for PureFunction with another which removes lines starting with '@ObjectiveFunction'.
+#   for PureFunction with another which removes lines starting with '@ObjectiveFunction'.  
 # AND YET: Now that tags are stored with `set` instead of `frozenset`, adding
 #   tags should be harmless (unless they are dynamically removed).
 #   Keeping the hack for now since it works and I don't care to work out
-#   the magic done by ObjectiveFunction.__new__.
+#   the magic done by ObjectiveFunction.\_\_new\_\_.
 
 # %% [markdown]
 # (objective-functions)=
@@ -796,8 +833,25 @@ sinnfull.json_encoders.update(mtbtyping.json_encoders)
 # `ObjectiveFunction`: Tag validation
 # :::
 
+# %% tags=["remove-cell"]
+from pydantic.main import ModelMetaclass as BaseModelMeta
+class ObjectiveFunctionMeta(BaseModelMeta):
+    def __getattr__(cls, attr):
+        if hasattr(BaseModel, '__getattr__'):
+            try:
+                return BaseModel.__getattr__(cls, attr)
+            except AttributeError:
+                pass
+        if attr != 'tags' and attr in cls.tags:
+            return cls
+        else:
+            raise AttributeError(f"{cls} does "
+                                 f"not define the attribute '{attr}'.")
+
+
+
 # %% tags=["hide-input"]
-class ObjectiveFunction(BaseModel, abc.ABC):
+class ObjectiveFunction(BaseModel, abc.ABC, metaclass=ObjectiveFunctionMeta):
     """
     A wrapper around objective functions, allowing serialization and
     basic arithmetic operations (provided by smttask.PureFunction).
@@ -884,7 +938,7 @@ class ObjectiveFunction(BaseModel, abc.ABC):
             return decorator  # Not an ObjectiveFunction => won't trigger __init__
         else:
             return super().__new__(cls)
-
+        
     ## Validation ##
     ## It would be convenient to be able to validate serialized strings as well,
     ## but I get "unexpected keyword argument 'value'" when I do this:
