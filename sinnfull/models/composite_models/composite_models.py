@@ -25,24 +25,29 @@
 # This assumption greatly simplies building the composite model, and allows conditional log probabilities to trivially factorize across models.   
 # :::
 
+# %% [markdown] tags=["remove-cell"]
+# > **Structural note**
+# > Even though there is only one *composite_models* module, placing it in a directory allows it to be found by [*_scandir.py*](../_scandir.py).
+
 # %% tags=["remove-cell"]
 from __future__ import annotations
 
 # %% tags=["remove-cell"]
 import sinnfull
 if __name__ == "__main__":
-    sinnfull.setup('numpy')
+    sinnfull.setup('theano')
 
 # %% tags=["hide-cell"]
 from typing import Any, Optional, Union
 import numpy as np
 import theano_shim as shim
 from mackelab_toolbox.typing import FloatX, Shared, Array
-from sinn.models import initializer
+from sinn.models import initializer, ModelParams
 from sinn.histories import TimeAxis, Series, AutoHist
 
 from sinnfull.models.base import Model, Param
 from sinnfull.models.GWN.GWN import GaussianWhiteNoise  # -> NoiseSource
+from sinnfull.utils import add_to, add_property_to
 
 # %%
 __all__ = ['ObservedDynamics']
@@ -55,16 +60,65 @@ __all__ = ['ObservedDynamics']
 #
 # [![](https://mermaid.ink/img/eyJjb2RlIjoiZ3JhcGggTFJcbiAgICBpbnB1dHt7aW5wdXQ6IE5vaXNlU291cmNlfX0gLS0-IGR5bmFtaWNzXG4gICAgZHluYW1pY3NbZHluYW1pY3M6IE1vZGVsXSAtLT4gb2JzZXJ2YXRpb25zXG5cbiAgICBzdHlsZSBvYnNlcnZhdGlvbnMgZmlsbDp0cmFuc3BhcmVudCwgc3Ryb2tlLXdpZHRoOjAiLCJtZXJtYWlkIjp7fSwidXBkYXRlRWRpdG9yIjpmYWxzZX0)](https://mermaid-js.github.io/mermaid-live-editor/#/edit/eyJjb2RlIjoiZ3JhcGggTFJcbiAgICBpbnB1dHt7aW5wdXQ6IE5vaXNlU291cmNlfX0gLS0-IGR5bmFtaWNzXG4gICAgZHluYW1pY3NbZHluYW1pY3M6IE1vZGVsXSAtLT4gb2JzZXJ2YXRpb25zXG5cbiAgICBzdHlsZSBvYnNlcnZhdGlvbnMgZmlsbDp0cmFuc3BhcmVudCwgc3Ryb2tlLXdpZHRoOjAiLCJtZXJtYWlkIjp7fSwidXBkYXRlRWRpdG9yIjpmYWxzZX0)
 
+# %% tags=["remove-cell"]
+class SubmodelParams(ModelParams):
+    class Config:
+        extra = 'allow'
+    # Ensure values are always returned in a consistent order (c.f. OptimParams)
+    def __iter__(self):
+        values = {k: v for k,v in super().__iter__()}
+        for k in sorted(values):
+            yield k, values[k]
+    def dict(self, **kwargs):
+        d = super().dict(**kwargs)
+        return {k: d[k] for k in sorted(d)}
+
+
 # %%
 class ObservedDynamics(Model):
     time    : TimeAxis
     input   : GaussianWhiteNoise  # -> NoiseSource, or Model
     dynamics: Model
         
-    def initialize(self, initializer=None):
-        self.input.initialize(initializer)
-        self.dynamics.initialize(initializer)
+    class Parameters(ModelParams):
+        input: SubmodelParams
+        dynamics: SubmodelParams
+        
+    def initialize(self, initializer: Union[None,str,tuple,dict]=None):
+        if not isinstance(initializer, dict):
+            initializer = {'input': initializer, 'dynamics': initializer}
+        self.input.initialize(initializer['input'])
+        self.dynamics.initialize(initializer['dynamics'])
+    
+    @classmethod            # argument names should match the submodel names
+    def get_test_parameters(cls, input, dynamics, rng=None):
+        return cls.Parameters(input=input.get_test_parameters(rng),
+                              dynamics=dynamics.get_test_parameters(rng))
 
+
+# %% [markdown]
+# ## Composite priors
+#
+# Composite priors can be create with PyMC3's mechanism for combining models. The only requirement is to assign to each subprior the name of the corresponding submodel.
+#
+# For example, the [`ObservedDynamics`](#observed-dynamics) model defines the submodels `input` and `dynamics`; a composite prior for this model might therefore look like:
+
+# %% tags=["hide-cell"]
+if __name__ == "__main__":
+    import pymc3 as pm
+    from sinnfull.models import Prior, priors
+
+    # %% tags=["hide-output"]
+    with Prior() as obs_dyn_prior:
+        priors.GWN.default(M=2, name="input")
+        priors.WC.default(M=2, name="dynamics")
+
+    obs_dyn_prior
+
+# %% [markdown]
+# :::{note}  
+# Composing subpriors like this works if they are independent. If there are subpriors which depend on others (e.g. because they share a random variable), at present they need to be defined by explicitely listing their random variables, and using `Deterministic` to define dependencies.  
+# :::
 
 # %% [markdown]
 # ## Tests & examples
@@ -80,9 +134,6 @@ if __name__ == "__main__":
     from sinnfull.models.GWN.GWN import GaussianWhiteNoise
     from sinnfull.models.WC.WC import WilsonCowan
     from sinnfull.rng import get_shim_rng
-    from IPython.display import display
-    import holoviews as hv
-    hv.extension('bokeh')
 
     # Parameters
     rng_sim = get_shim_rng((1,0), exists_ok=True)
@@ -110,12 +161,25 @@ if __name__ == "__main__":
         dynamics=dyn
     )
 
+# %% [markdown]
+# :::{margin}  Formatted representation
+# Model representations are nicely formatted in a Jupyter notebook.
+# :::
+
+    # %% tags=["remove-cell"]
+    from IPython.display import display
+    import holoviews as hv
+    hv.extension('bokeh')
+
+    # %% tags=["hide-output"]
+    display(model)
+
     # %%
     # Initialize & integrate
     model.dynamics.u[-1] = 0
     model.integrate('end')
 
-    # %%
+    # %% tags=["hide-input"]
     # Plot histories
     traces = []
     for hist in model.history_set:
@@ -127,12 +191,18 @@ if __name__ == "__main__":
 
 # %% [markdown]
 # The same result can be achieved using the `CreateModel` Task, which provides the `submodels`, `subparams` and `connect` arguments for this purpose. The advantage of using a Task is that nothing is evaluated before `run` is called, which allows the model to be used in a [workflow](/sinnfull/workflows/index).
+#
+# We also show how to use the composite prior defined above to sample model parameters.
 
     # %%
     from sinnfull.tasks import CreateModel
+    from sinnfull.parameters import ParameterSet
     import smttask; smttask.config.record = False  # Turn off recording for tests
 
     # %%
+    Θ = ParameterSet(obs_dyn_prior.random((3,1)))
+        # ParameterSet builds a dictionary by splitting on '.' in RV names
+    
     create_model = CreateModel(
         time   =time,
         model  ='ObservedDynamics',
@@ -140,7 +210,7 @@ if __name__ == "__main__":
         rng_key=(0,1),
         submodels = {'input':'GaussianWhiteNoise',
                      'dynamics': 'WilsonCowan'},
-        subparams = {'input': Θ_gwn, 'dynamics': Θ_wc},
+        subparams = {'input': Θ.input, 'dynamics': Θ.dynamics},
         connect=['GaussianWhiteNoise.ξ -> WilsonCowan.I']
     )
     model2 = create_model.run()
@@ -148,3 +218,5 @@ if __name__ == "__main__":
     # %%
     # Confirm that the models were connected as specified
     assert model2.input.ξ is model2.dynamics.I
+
+# %%

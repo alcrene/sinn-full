@@ -42,6 +42,7 @@ from __future__ import annotations
 # - The function `draw_model_sample` to draw a reproducible sample from a PyMC3 model by providing an RNG key tuple.
 
 # %%
+from warnings import warn
 from typing import Tuple, Optional, List
 import numpy as np
 
@@ -169,7 +170,7 @@ def get_shim_rng(seed_key: Union[Tuple[int,...], int], exists_ok: bool=False) ->
 # %%
 import pymc3 as pm
 
-def draw_model_sample(model: 'sinn.Model', key: Tuple[int],
+def draw_model_sample(model: 'sinn.Model', key: Optional[Tuple[int]]=None,
                       var_names: Optional[List[str]]=None, n :int=1):
     """
     Draw `n` samples from the model.
@@ -181,8 +182,13 @@ def draw_model_sample(model: 'sinn.Model', key: Tuple[int],
     if var_names is None:
         var_names = [v.name for v in model.vars]
         # vars = free_RVs = all RVs which are not observed and not deterministics
-    seed = get_seedsequence(key, exists_ok=True).generate_state(1)[0]
-        # exists_ok=True is safe if `key` is not used elsewhere in the code
+    if key is not None:
+        seed = get_seedsequence(key, exists_ok=True).generate_state(1)[0]
+            # exists_ok=True is safe if `key` is not used elsewhere in the code
+    else:
+        warn("Drawing a sample from a PyMC3 model without specifying a seed "
+             "is not reproducible.")
+        seed = None
     var_names = sorted(var_names)
     return pm.sample_prior_predictive(
         samples=1,

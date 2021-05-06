@@ -54,6 +54,7 @@ def GWN_logp(self, k):
     "Log probability of the GaussianWhiteNoise model."
     μ=self.μ; logσ=self.logσ; σ=shim.exp(logσ);
     Δt=self.dt; ξ=self.ξ
+    Δt = getattr(Δt, 'magnitude', Δt)  # In case 'Δt' is a Pint or Quantities
     norm = -logσ + 0.5*shim.log(Δt)
     gauss = - (ξ(k)-μ)**2 * shim.sqrt(Δt) / (2*σ)
     return norm.sum() + gauss.sum()

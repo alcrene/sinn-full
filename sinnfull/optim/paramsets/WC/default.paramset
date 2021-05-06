@@ -21,8 +21,8 @@
 'Tθb': Parameter(1, units='s'),
 'Tθr': Parameter(1, units='s'),
 'Nθb': 10,
-'Tηb': Parameter(5, units='s'),
-'Tηr': Parameter(1, units='s'),
+'Tηb': Parameter(20, units='s'),
+'Tηr': Parameter(0, units='s'),
 'Nηb': 100,
 
 'θ_mask':

@@ -15,11 +15,11 @@
 #
 # Defines abstract base classes for `DataAccessor` and `Trial`, which provide generic functionality which is agnostic to the data source. Concrete subclasses are defined in other modules in this directory.
 #
-# Classes:  
-# ~ `DataAccessor`  
+# Classes:
+# ~ `DataAccessor`
 # ~ `Trial`
 #
-# Functions:  
+# Functions:
 # ~ `get_data_format()`
 
 # %%
@@ -167,21 +167,6 @@ class DataAccessor(abc.ABC):
     def Trial(self) -> type:
         """
         Class attribute: Trial type
-        """
-        pass
-
-    @abc.abstractmethod
-    def extract_subjects(self, trials) -> Dict[str, Subject]:
-        """
-        Parse the metadata file for each subject
-
-        Parameters
-        ----------
-        trials: xarray.Dataset or pandas.DataFrame
-
-        Returns
-        -------
-        dict of {subject label: Subject} pairs
         """
         pass
 
@@ -378,7 +363,6 @@ class DataAccessor(abc.ABC):
             trialdim_name = next(iter(self.trials.dims.keys()))
             trials = trials.to_dataframe()
             trials.index.name = trialdim_name  # As above, require by xarray to match dims
-        new_subjects = self.extract_subjects(trials)
         with warnings.catch_warnings():
             # xarray stores the 'trials' index as an array `data`, and checks for
             # inclusion `key in data`. Since `key` is a MultiIndex, it's a tuples
@@ -389,9 +373,7 @@ class DataAccessor(abc.ABC):
             # silence the warning
             warnings.simplefilter('ignore', FutureWarning)
             assert all(t_idx not in self.trials.trialkey for t_idx in trials.index)
-            assert all(p not in self.subjects for p in new_subjects)
         self.trials = xr.merge((self.trials, xr.Dataset(trials)))
-        self.subjects.update(new_subjects)
 
     def get_subject_metadata_files(self, trials) -> Generator:
         """

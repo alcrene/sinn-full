@@ -433,7 +433,7 @@ if __name__ == "__main__":
     def get_Θ(optimizer):
         return tuple(shim.eval(θ) for θ in optimizer.Θ)
     def get_latents(optimizer):
-        return tuple(h.get_trace(include_padding=True) for h in optimizer.latent_hists)
+        return tuple(h.get_data_trace(include_padding=True) for h in optimizer.latent_hists)
     optimizer.add_recorder(Recorder(name='log L', record=get_logL))
     optimizer.add_recorder(Recorder(name='Θ', record=get_Θ, keys=tuple(Θ.keys())))
     optimizer.add_recorder(Recorder(name='latents', record=get_latents,
@@ -484,7 +484,7 @@ if __name__ == "__main__":
     fig, axes = plt.subplots(nrows,ncols, squeeze=False, sharex=True, sharey='row', figsize=(plotw*ncols,ploth*nrows))
 
     xarr = trueItilde.get_time_array(include_padding=True)
-    Itilde_target = trueItilde.get_trace(include_padding=True)
+    Itilde_target = trueItilde.get_data_trace(include_padding=True)
     for i, axes_comp in zip(rec_idcs, axes.T):
         Itilde_trace = latent_recorder.values[i][0]
         for m, ax in enumerate(axes_comp):

@@ -144,7 +144,7 @@ class OU_AR(Model):
     def initialize(self, initializer=None):
         """Set the initial conditions."""
         # Skip any already initialized histories; in this model there is only
-        # the Itilde history.
+        # the Itilde history which has initial conditions.
         if self.Itilde.cur_tidx >= 0:
             return
         self.Itilde.pad(1)
@@ -157,7 +157,7 @@ class OU_AR(Model):
                                           size=(self.M,))
             self.Itilde[-1] = shim.eval(Itilde_init)
         elif isinstance(initializer, dict):
-            for k, v in initializer.values:
+            for k, v in initializer.items():
                 h = getattr(self,k,None)
                 if h is not None:
                     assert isinstance(h, History)
@@ -204,7 +204,7 @@ class OU_AR(Model):
 
     @add_to('OU_AR')
     @classmethod
-    def stationary_dist(cls, params: ModelParams, seed=None):
+    def stationary_dist(cls, params: ModelParams):
         """
         Return a PyMC3 model corresponding to the process' stationary distribution
         with the current model parameters.
@@ -307,8 +307,8 @@ class OU_AR(Model):
             params = self.params
         Θ = params.get_values() if hasattr(params, 'get_values') else params
         if in_place:
-            #I = self.I.get_trace(include_padding=True)
-            Itilde = self.Itilde.get_trace(include_padding=True)
+            #I = self.I.get_data_trace(include_padding=True)
+            Itilde = self.Itilde.get_data_trace(include_padding=True)
 
         # Remove scaling degeneracy
         σfactor = abs(Θ.Wtilde.sum(axis=0))
@@ -396,8 +396,8 @@ if __name__ == "__main__":
     model = OU_AR(time=time, params=Θ_OU, rng=shim.config.RandomStream())
     model.integrate('end', histories='all')
 
-    orig_I = model.I.get_trace().copy()
-    orig_Itilde = model.Itilde.get_trace().copy()
+    orig_I = model.I.get_data_trace().copy()
+    orig_Itilde = model.Itilde.get_data_trace().copy()
 
     # I = (Atilde * Wtilde) @ Itilde
     assert np.all(orig_I == np.array([(model.Atilde*model.Wtilde) @ It
@@ -413,13 +413,13 @@ if __name__ == "__main__":
     assert np.all(model.logσtilde != orig_logσtilde)
 
     # Itilde has changed. I has not
-    assert np.all(orig_Itilde != model.Itilde.get_trace())
-    assert np.all(orig_I == model.I.get_trace())
+    assert np.all(orig_Itilde != model.Itilde.get_data_trace())
+    assert np.all(orig_I == model.I.get_data_trace())
 
     # We still have I = Wtilde @ Itilde
     assert np.all(np.isclose(orig_I,
                              np.array([(model.Atilde*model.Wtilde) @ It
-                                       for It in model.Itilde.get_trace()])))
+                                       for It in model.Itilde.get_data_trace()])))
 
 # %% tags=["hide-cell"]
 if __name__ == "__main__":

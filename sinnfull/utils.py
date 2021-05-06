@@ -63,14 +63,6 @@ get_field_values(records: Sequence[NamedTuple]) -> Dict[str,list]:
     Find all unique field values from a list of named tuples.
     Returns {field name: field values}.
 
-Model definition and execution
-------------------------------
-
-draw_model_sample(model, key, n=1)
-    Draw `n` samples from the model.
-    Wrapper around `pymc3.sample_prior_predictive` which ensures it is
-    reproducible.
-
 Task creation
 -------------
 generate_task_from_nb(input_path: str, *, parameters: ParameterSet, exec_environment: str, return_val: str, ...) -> Task | taskdesc (JSON) | notebook | None
@@ -331,7 +323,7 @@ def dataset_from_histories(histories: Iterable) -> xr.Dataset:
             assert h.time.unit == time_array.unit
         hist_dims = [f"{h.name}_dim{i}" for i in range(h.ndim)]
         array = xr.DataArray(
-            h.get_trace(),
+            h.get_data_trace(),
             name=h.name,
             coords={'time': time_array},
             dims=['time'] + hist_dims,

@@ -65,6 +65,10 @@ from sinn.models import Model, ModelParams
 from sinnfull.data.base import DataAccessor as BaseAccessor, Trial as BaseTrial
 import sinnfull.utils as utils
 
+# %%
+__all__ = ["SyntheticTrial", "SyntheticDataAccessor"]
+
+# %%
 class SyntheticTrial(BaseTrial):
     # Inherited from BaseTrial:
     # - Config: extra='forbid'
@@ -95,7 +99,7 @@ class SyntheticTrial(BaseTrial):
             else:
                 params = model.Parameters(**params)
         if model is not None:
-            hists_to_init = {h.name for h in model.history_set
+            hists_to_init = {nm for nm,h in model.nested_histories.items()
                              if h.pad_left}
             init_hists = set(init_cond.keys())
             if hists_to_init == init_hists:
@@ -149,6 +153,7 @@ class SyntheticTrial(BaseTrial):
         # Cannot invert hashes
         raise NotImplementedError
 
+# %%
 class SyntheticDataAccessor(BaseAccessor):
     """
     Same interface as DataAccessor, but instead of retrieving data from disk,
@@ -289,7 +294,7 @@ class SyntheticDataAccessor(BaseAccessor):
         # Create the data by integrating the model
         model.update_params(trial.params)
         for histname, init_val in trial.init_cond.items():
-            hist = getattr(model, histname)
+            hist = model.nested_histories[histname]
             hist[:hist.t0idx] = init_val
         model.integrate(upto='end', histories='all')
         if hasattr(model, 'remove_degeneracies'):

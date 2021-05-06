@@ -19,7 +19,7 @@
 # See also [models – Taming proliferation](tags-taming-model-proliferation).
 
 from __future__ import annotations
-from collections.abc import Iterable
+from collections.abc import Iterable, Sized
 from typing import Union, Dict
 
 class TaggedCollection(list):
@@ -53,6 +53,26 @@ class TaggedCollection(list):
             return set(tags)
     def __init__(self, iterable: Iterable, squeeze=True):
         super().__init__((x, self._set_cast_str(tags)) for x, tags in iterable)
+        # Set self.tags, self.values, and check for duplicates
+        self.validate_tags()
+        # Set self._squeeze
+        self._squeeze = squeeze
+
+    def __str__(self):
+        return f"TaggedCollection<{len(self)} items, tags={self.tags}>"
+    def by_tag(self) -> Dict[frozenset, list]:
+        tag_sets = {}
+        for obj, tags in self:
+            tag_sets[frozenset(tags)] = obj
+        return tag_sets
+
+    def append(self, value):
+        "Note: This function revalidates the entire list of tags on each call."
+        assert isinstance(value, Sized) and len(value) == 2
+        super().append(value)
+        self.validate_tags()
+
+    def validate_tags(self):
         ## Set self.tags
         self.tags = set().union(*(tags for x,tags in self))
         if not all(isinstance(tag, str) for tag in self.tags):
@@ -76,17 +96,12 @@ class TaggedCollection(list):
         if invalid_dups:
             raise ValueError("Multiple sets of tags were specified for the "
                              f"following values: {invalid_dups}.")
-        self.values = [x for x,tags in seen.values()]
-        ## Set self._squeeze
-        self._squeeze = squeeze
+        # Remove duplicates in `self` by replacing with values in `seen.values()`
+        self[:] = seen.values()
 
-    def __str__(self):
-        return f"TaggedCollection<{len(self)} items, tags={self.tags}>"
-    def by_tag(self) -> Dict[frozenset, list]:
-        tag_sets = {}
-        for obj, tags in self:
-            tag_sets[frozenset(tags)] = obj
-        return tag_sets
+    @property
+    def values(self):
+        return [x for x,tags in self]
 
     def filter(self, tag, remove=False):
         """

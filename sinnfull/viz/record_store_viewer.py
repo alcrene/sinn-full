@@ -1154,7 +1154,7 @@ class FitData(BaseModel):
             interpolated_stops = np.linspace(stops[0], stops[-1], bokeh_opts.η_curve_points)
             # Create all the history curves
             for hist in model.history_set:
-                trace = hist.get_trace()
+                trace = hist.get_data_trace()
                 for hist_index in mtb.utils.index_iter(hist.shape):
                     dimname = hist.name+''.join(str(i) for i in hist_index)
                     dim = key_dims.get(dimname)

@@ -21,14 +21,16 @@ from __future__ import annotations
 
 # %% tags=["hide-input"]
 import abc
+import copy
 from collections import namedtuple
 from types import SimpleNamespace
-from typing import Optional, Union, List, Callable
+from typing import Optional, Union, List, Dict, Callable
 from enum import Flag
 from numbers import Integral
 from pydantic import BaseModel, validator, root_validator
 
-from mackelab_toolbox.typing import Array, FloatX, RNGenerator
+import theano_shim as shim
+from mackelab_toolbox.typing import json_like, Array, FloatX, RNGenerator
 from sinn.histories import History
 from sinn.models import ModelParams, initializer
 
@@ -162,8 +164,8 @@ class Optimizer(BaseModel, abc.ABC):
     model              : Model
     rng                : Optional[RNGenerator]=None
     data_segments      : Union[SegmentSampler]
-    observed_hists     : List[History]
-    latent_hists       : List[History]
+    observed_hists     : Dict[str,History]
+    latent_hists       : Dict[str,History]
     Θ                  : OptimParams   # Set with `init_params` argument
     fit_hyperparams    : ParameterSet
     update_hyperparams : Optional[Callable[[Optimizer],dict]]
@@ -177,6 +179,7 @@ class Optimizer(BaseModel, abc.ABC):
     stepi               : int=0
     orig_fit_hyperparams: ParameterSet=None
     status              : OptimizerStatus=OptimizerStatus.NotConverged
+        # `status` is used by subclasses
     outcome             : tuple=()
 
     class Config:
@@ -210,8 +213,10 @@ class Optimizer(BaseModel, abc.ABC):
     latent_hists: List of latent histories.
         Latent histories have a random dependency but cannot be directly inferred
         from observations.
+        Although they can be specified as both History instances or string names,
+        strings are preferred, since they also work with histories in submodels.
         The following applies to both `observed_hists` and `latent_hists`:
-           If there is only one latent history, it need not be wrapped with a list.
+           If there is only one history, it need not be wrapped with a list.
            Histories can be specified as strings, in which case the corresponding
            attribute is retrieved from `model`.
     fit_hyperparams: ParameterSet
@@ -238,23 +243,36 @@ class Optimizer(BaseModel, abc.ABC):
         with `.set_value()`).
     """
 
+    # @classmethod
+    # def _get_nested_hist(cls, histnm, model):
+    #     if '.' in histnm:
+    #         submodelnm, histnm = histnm.split('.', 1)
+    #         return cls._get_nested_hist(histnm, getattr(model, submodelnm))
+    #     else:
+    #         return getattr(model, histnm)
+
     @initializer('observed_hists', 'latent_hists', always=True)
-    def wrap_with_list(cls, hists, model):
+    def retrieve_model_hists(cls, hists, model):
         """
         Wrap bare histories with a list, and ensure listed histories are part of the model.
         Histories specified as strings are replaced by the actual history.
         """
-        if isinstance(hists, History):
+        if isinstance(hists, (History,str)):
             hists = [hists]
-        for i, h in enumerate(hists[:]):
+        hist_dict = {}
+        for h in hists:
             if isinstance(h, str):
-                hists[i] = getattr(model, h)
-        if not all(h in model.history_set for h in hists):
+                hist_dict[h] = getattr(model, h)
+            else:
+                # NB: Using hist name doesn't allow specifying hists in submodels
+                assert isinstance(h, History)
+                hists_dict[h.name] = h
+        if not all(h in model.history_set for h in hist_dict.values()):
             raise AssertionError("The following histories are part of the model "
                                  "but not of its history_set: \n"
                                  f"{[h.name for h in hists if h not in model.history_set]}\n"
                                  "This should not happen.")
-        return hists
+        return hist_dict
 
     ## Deserialize functions passed as string
     @validator('update_hyperparams', pre=True)
@@ -319,8 +337,8 @@ class Optimizer(BaseModel, abc.ABC):
         store = Store(self.observed_hists, self.latent_hists,
                       self.logp_params, self.logp_latents,
                       self.logp_latents_nodyn)
-        self.observed_hists = [h.name for h in self.observed_hists]
-        self.latent_hists = [h.name for h in self.latent_hists]
+        self.observed_hists = list(self.observed_hists.keys())
+        self.latent_hists = list(self.latent_hists.keys())
 
         d = super().dict(*args, **kwargs)
         # Use original values of 'fit_hyperparams'
@@ -381,6 +399,8 @@ class OptimParams(ModelParams):
     - All parameters are Shared variables.
       (Models may define their `ModelParams` such that they accept
       other types, such as PyMC3 random variables.)
+    - Nested parameter sets are flattened, using dotted names to indicate
+      their hierarchy.
     """
     class Config:
         extra = 'allow'
@@ -396,12 +416,18 @@ class OptimParams(ModelParams):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         for θnm, θ in self:
-            if mtbtyping.json_like(θ, 'Array'):
+            if json_like(θ, 'Array'):
                 θ = Array.validate(θ)
-            if not shim.isshared(θ):
+            if isinstance(θ, dict):
+                nestedΘ = OptimParams(**θ)
+                for nestednm, nestedθ in nestedΘ:
+                    setattr(self, f"{θnm}.{nestedθ}", nestedθ)
+                delattr(self, θnm)
+            elif not shim.isshared(θ):
+                # NB: Repeated from __setattr__ to ensure `θnm` is used for the name
                 setattr(self, θnm, shim.shared(θ, name=θnm))
     def __setattr__(self, attr, val):
-        if mtbtyping.json_like(val, 'Array'):
+        if json_like(val, 'Array'):
             val = Array.validate(val)
         if not shim.isshared(val):
             val = shim.shared(val, name=attr)

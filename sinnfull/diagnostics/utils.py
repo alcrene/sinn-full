@@ -354,13 +354,13 @@ class GradInspector:
 
 
     #    idcs = [(StrTuple(idx), idx) for idx in np.ndindex(ηhist.shape)]
-    #    η = hv.HoloMap({idx: hv.Curve(zip(ηhist.time_stops, ηhist.get_trace(*idx_tup)),
+    #    η = hv.HoloMap({idx: hv.Curve(zip(ηhist.time_stops, ηhist.get_data_trace(*idx_tup)),
     #                                  kdims=η_gt[idx].kdims, vdims=η_gt[idx].vdims)
     #                                   #    kdims=['time'], vdims=[ηhist.name+"_"+str(idx).replace("(", "").replace(")", "").replace(",", "")])
     #                    for idx, idx_tup in idcs}, kdims=η_gt.kdims)
     #    η.opts(framewise=True);
         idx = StrTuple((hist_idx,))
-        ηi = hv.Curve(zip(ηhist.time_stops, ηhist.get_trace(hist_idx)),
+        ηi = hv.Curve(zip(ηhist.time_stops, ηhist.get_data_trace(hist_idx)),
                           kdims=η_gt[idx].kdims, vdims=η_gt[idx].vdims)
 
         # For each latent component, convert it to a path & concatenate with the gradient

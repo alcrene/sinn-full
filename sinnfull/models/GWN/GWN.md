@@ -45,7 +45,9 @@ if __name__ == "__main__":
 from typing import Any, Optional, Union
 import numpy as np
 import theano_shim as shim
-from mackelab_toolbox.typing import FloatX, Shared, Array, AnyRNG, RNGenerator
+from mackelab_toolbox.typing import (
+    FloatX, Shared, Array, AnyRNG, RNGenerator,
+    IndexableNamespace as IndexableNamespaceBase)
 # Move with NoiseSource:
 from pydantic import BaseModel, PrivateAttr
 import sys, inspect
@@ -213,11 +215,11 @@ tags: [hide-input]
         stateline += ', '.join([f'<code>{v}</code>' for v in summary.state_vars])
         stateline += '</li>'
         paramblock = '<li>Parameters\n<ul>\n'
-        if isinstance(summary.params, dict):
-            for name, val in summary.params.items():
+        if isinstance(summary.params, IndexableNamespaceBase):
+            for name, val in summary.params:
                 paramblock += f'<li><code> {name}={val}</code></li>\n'
         else:
-            for name, val in summary.params:
+            for name in summary.params:
                 paramblock += f'<li><code> {name}</code></li>\n'
         paramblock += '</ul>\n</li>'
         updfnblock = ""
@@ -281,6 +283,12 @@ tags: [hide-input]
     @add_property_to('GaussianWhiteNoise')
     def nonnested_history_set(self):
         return {getattr(self, nm) for nm in self._hist_identifiers}
+    @property
+    def nested_histories(self):
+        return {**self.nonnested_histories,
+                **{f"{submodel_nm}.{hist_nm}": hist
+                   for submodel_nm, submodel in self.nested_models.items()
+                   for hist_nm, hist in submodel.nested_histories.items()}}
     @add_property_to('GaussianWhiteNoise')
     def history_set(self):
         return set(chain(self.nonnested_history_set,
@@ -447,7 +455,7 @@ tags: [hide-input]
         else:
             params = getattr(self, 'params', None)
             if params:
-                summary.params = params.dict()
+                summary.params = params.get_values()
             else:
                 summary.params = {}
         summary.update_functions = self.get_update_summaries(hists)
@@ -657,7 +665,7 @@ tags: [hide-input]
 
         Parameters
         -----------
-        params: Any value which can be used to construct a `cls.Parameters`
+        params: Any value which can be used to construct a `self.Parameters`
             instance. If `None`, `self.params` is used.
         _max_cost: Default value should generally be fine. See
             `theano_shim.graph.eval` for details.
@@ -665,10 +673,10 @@ tags: [hide-input]
         if params is None:
             params = self.params
         symbolic_params = shim.is_symbolic(params)
-        # Casting into cls.Parameters is important because cls.Parameters
+        # Casting into self.Parameters is important because self.Parameters
         # might use properties to define transforms of variables
-        if not isinstance(params, cls.Parameters):
-            params = cls.Parameters(params)
+        if not isinstance(params, self.Parameters):
+            params = self.Parameters(params)
         stats = self._stationary_stats(params)
         if not symbolic_params:
             stats = shim.eval(stats)
@@ -728,12 +736,14 @@ $$\begin{aligned}
 
     @add_to('GaussianWhiteNoise')
     def _stationary_stats(self, params: ModelParams):
+        dt = self.dt
+        dt = getattr(dt, 'magnitude', dt)  # In case 'dt' is a Pint or Quantities
         return {'ξ': {'mean': params.μ,
-                      'std': shim.exp(params.logσ)/shim.sqrt(self.dt)}}
+                      'std': shim.exp(params.logσ)/shim.sqrt(dt)}}
 
     @add_to('GaussianWhiteNoise')
     def stationary_dist(self, params: ModelParams):
-        stats = cls.stationary_stats(params)
+        stats = self.stationary_stats(params)
         with pm.Model() as statdist:
             ξ_stationary = pm.Normal(
                 "ξ",
@@ -774,7 +784,8 @@ It can be useful to also define a `get_test_parameters` method on the class, to 
         :param:rng: Any value accepted by `numpy.random.default_rng`.
         """
         rng = np.random.default_rng(rng)
-        M = rng.integers(1,5)
+        #M = rng.integers(1,5)
+        M = 2  # Currently no way to ensure submodels draw the same M
         Θ = cls.Parameters(μ=rng.normal(size=(M,)),
                            logσ=rng.normal(size=(M,)),
                            M=M)

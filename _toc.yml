@@ -23,7 +23,7 @@
     - file: sinnfull/models/GWN/GWN
       sections:
       - file: sinnfull/models/GWN/gwn-priors
-    - file: sinnfull/models/composite_models
+    - file: sinnfull/models/composite_models/composite_models.py
 
   - file: sinnfull/optim/index
     sections:

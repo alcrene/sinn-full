@@ -43,7 +43,6 @@ import sinnfull.diagnostics
 sinnfull.diagnostics.set(__name__ == "__main__")
 
 # %% tags=["hide-input"]
-import copy
 from warnings import warn
 from types import SimpleNamespace
 from typing import Union, Optional, Any, Callable, List, Tuple, Dict
@@ -182,7 +181,8 @@ class AlternatedSGD(Optimizer):
 
     # DEPRECATION: Everything with 'nodyn' should probably be deprecated
     logp_default_nodyn : Optional[Callable[[Integral], FloatX]]=None
-    logp_latents_nodyn : Callable[[Integral, Integral], Tuple[List[FloatX],dict]]
+    logp_latents_nodyn : Optional[Callable[[Integral, Integral], Tuple[List[FloatX],dict]]]=None
+        # NB: logp_latents_nodyn is not Optional if we use batched latent updates
     _recorders          : Dict[str,Recorder]=PrivateAttr(default_factory=lambda:{})
         # _recorders attribute will be deprecated
     # TODO: Also move convergence tests to the task
@@ -232,8 +232,8 @@ class AlternatedSGD(Optimizer):
         Accumulator functions; (startidx, batch_size) -> (accumulated_var, updates)
         `logp_params` is used to compile the parameter updates;
         `logp_latents` is used to compile the latent updates
-        `logp_latents_nodyn` is used for the rightmost latent update; it should
-            exclude contributions from the latent dynamics to the cost.
+        `logp_latents_nodyn` (deprecated) is used for the rightmost latent update;
+          it should exclude contributions from the latent dynamics to the cost.
     logp: Function (tidx) -> Real
         Serves as a default for either `logp_params` or `logp_latents`.
         Note that this is not an accumulator; it will be wrapped with
@@ -334,9 +334,10 @@ class AlternatedSGD(Optimizer):
     def set_logp_latents_nodyn(cls, logp_latents_nodyn, logp_default_nodyn, model):
         if logp_latents_nodyn is None:
             if logp_default_nodyn is None:
-                logp_default_nodyn = getattr(model, 'logp_nodyn', None)
-            if logp_default_nodyn is None:
-                raise ValueError("Either `logp_latents_nodyn` or `logp_nodyn` must be specified.")
+                return None
+            #     logp_default_nodyn = getattr(model, 'logp_nodyn', None)
+            # if logp_default_nodyn is None:
+            #     raise ValueError("Either `logp_latents_nodyn` or `logp_nodyn` must be specified.")
             logp_latents_nodyn = logp_default_nodyn
         acc_latents_nodyn = getattr(logp_latents_nodyn, '_accumulator', None)
         if acc_latents_nodyn is None:
@@ -401,7 +402,8 @@ class AlternatedSGD(Optimizer):
         assert hasattr(self.logp_latents, '_accumulator')
         self.logp_params = self.logp_params.__func__
         self.logp_latents = self.logp_latents.__func__
-        self.logp_latents_nodyn = self.logp_latents_nodyn.__func__
+        if self.logp_latents_nodyn is not None:
+            self.logp_latents_nodyn = self.logp_latents_nodyn.__func__
 
         d = super().dict(*args, **kwargs)
 
@@ -423,7 +425,7 @@ class AlternatedSGD(Optimizer):
                              "is already attached to this optimizer.")
         recorders_dict[recorder.name] = recorder
 
-    # TODO: Rename to 'pop_recorder' ?
+    # TODO: Deprecate, when we stop storing recorders
     def remove_recorder(self, recorder: Union[Recorder, str]):
         recorders_dict = self._recorders
         recorder_name = recorder if isinstance(recorder, str) else recorder.name
@@ -435,7 +437,6 @@ class AlternatedSGD(Optimizer):
             warn(f"Attempted to remove recorder '{recorder.name}' from "
                  f"{type(self).__name}, but no Recorder of that name is "
                  "attached to this optimizer.")
-
     def remove_recorders(self):
         """Remove all recorders and return them as a dictionary."""
         recorders = {**self._recorders, **self.diagnostic_recorders}  # Makes shallow copies
@@ -580,7 +581,7 @@ class AlternatedSGD(Optimizer):
             # Changing the data segment requires:
             #   - Replacing all the data in the observed hists with that in the segment
             #   - Loading the current estimate of the latent history for that segment.
-            for h in self.observed_hists:
+            for h in self.observed_hists.values():
                 assert h.locked
                 h.unlock()
                 h[h.t0idx:] = data[h.name]  # I think initial conditions are not observed by definition ?
@@ -594,27 +595,27 @@ class AlternatedSGD(Optimizer):
                 # Initialize the latents by integrating the model
                 # This uses the current estimate of the parameters
                 #was_locked = {}
-                for h in self.latent_hists:
+                for h in self.latent_hists.values():
                     #was_locked[h] = h.locked
                     h.unlock()
                 # TODO: What if initialize can take arguments ?
                 # TODO: How do we set initial conditions ?
                 self.model.clear()
                 self.model.initialize()
-                self.model.integrate(upto='end', histories=self.latent_hists)
-                for h in self.latent_hists:
+                self.model.integrate(upto='end', histories=self.latent_hists.values())
+                for h in self.latent_hists.values():
                     #if was_locked[h]:
                     h.lock(warn=False)
                 # Initialize the cache
                 # This is not strictly necessary, but avoids not saving the
                 # latents at all when `udpate_latents` is False.
                 self.latent_cache[segmentkey] = utils.dataset_from_histories(
-                    self.latent_hists)
+                    self.latent_hists.values())
                 self.model.clear()
 
             else:
                 latents = self.latent_cache[segmentkey]
-                for h in self.latent_hists:
+                for h in self.latent_hists.values():
                     h.unlock()
                     #latent_data = self.get_latent_estimate(h, data)
                     h[:] = latent[h.name]
@@ -635,6 +636,7 @@ class AlternatedSGD(Optimizer):
 
     @add_to('AlternatedSGD')
     def step(self, update_params=True, update_latents=True):
+        # NB: `status` must be updated by the optimization Task (c.f. OptimizeTask)
         if (self.status & OptimizerStatus.Converged) is OptimizerStatus.Converged:
             # Bitwise & will match both 'Converged' and 'Failed'
             logger.info(f"Skipping `step` because optimizer has status <{self.status}>.")
@@ -646,7 +648,7 @@ class AlternatedSGD(Optimizer):
         ## Clear the model ##
         # -> We do this here instead of the end, so that the final integrated model
         #    can be further inspected.
-        for h in self.latent_hists:
+        for h in self.latent_hists.values():
             h.lock(warn=False)
         self.model.clear()
 
@@ -664,8 +666,8 @@ class AlternatedSGD(Optimizer):
                     "non-symbolic values.") from e
 
         ## Do updates ##
-        K = self.observed_hists[0].unpadded_length  # We need the data length for sample_batch_starts
-        assert all(K == h.unpadded_length for h in self.observed_hists[1:])
+        K = next(iter(self.observed_hists.values())).unpadded_length  # We need the data length for sample_batch_starts
+        assert all(K == h.unpadded_length for h in self.observed_hists.values())
         rng=self.rng
 
         #### Do parameter updates ####
@@ -712,7 +714,7 @@ class AlternatedSGD(Optimizer):
         ##  Save latent value for next round  ##
         if update_latents:
             self.latent_cache[segmentkey] = utils.dataset_from_histories(
-                self.latent_hists)
+                self.latent_hists.values())
 
         ## Increment step number ##
         self.stepi += 1
@@ -721,10 +723,10 @@ class AlternatedSGD(Optimizer):
         # TODO: Will be deprecated
         self.record(force=False)
 
-        ## Perform convergence checks and update status ##
-        # TODO: Will be deprecated
-        for convergence_test in self.convergence_tests:
-            self.status |= convergence_test(self)
+        # ## Perform convergence checks and update status ##
+        # # TODO: Will be deprecated
+        # for convergence_test in self.convergence_tests:
+        #     self.status |= convergence_test(self)
 
     # TODO: Deprecate record
     @add_to('AlternatedSGD')
@@ -789,19 +791,41 @@ class AlternatedSGD(Optimizer):
                 left unchanged.
 
         **Side-effects**
-        May clear model histories and change their locked status, as described
+        - Sets model parameters to match current optimization paramters (`self.Θ`)
+        - May clear model histories and change their locked status, as described
         above.
+
         """
+        # This is only really required when calling `initialize`, but for
+        # consistency we do it all the time.
+        self.model.params.set_values(
+            self.prior_params.backward_transform_params(self.Θ.get_values()),
+            must_not_set_other_params=False  # Required because at present, composite models use generic SubmodelParams for subparam sets
+        )
         ## Initialize model ##
         if force_initialize or any(h.cur_tidx < h.t0idx-1 for h in self.model.history_set):
-            raise NotImplementedError("We currently can't reliably transform "
-                                      "model parameters to optim parameters")
+            # uninitialized_hists = [f"  {nm} – cur tidx: {h.cur_tidx}, t0idx: {h.t0idx}"
+            #                        for nm, h in self.model.nested_histories.items()
+            #                        if h.cur_tidx < h.t0idx-1]
+            # if uninitialized_hists:
+            #     uninit_line = (
+            #         "\nThis also means that, instead of relying on the model's "
+            #         "`initialize` method, all histories must already be initialized. "
+            #         "(I.e. their current time index should be at least "
+            #         "`t0idx-1`.) This is is not the case for the following "
+            #         "histories:\n" + "\n".join(uninitialized_hists) )
+            # else:
+            #     uninit_line = ""
+            # raise NotImplementedError(
+            #     "Because we can't reliably transform model parameters to optim "
+            #     "parameters, it is not currently possible to initialize "
+            #     "the fit from the model parameters." + uninit_line)
             self.model.initialize(initializer)
-            self.Θ.set_values(self.prior_params.forward_transform_params(self.model.params.get_values()))
+            # self.Θ.set_values(self.prior_params.forward_transform_params(self.model.params.get_values()))
                 # FIXME: Above won't work if there are deterministics in the prior
         elif clear:
             for h in self.model.history_set:
-                if h in self.observed_hists:
+                if h in self.observed_hists.values():
                     h.lock(warn=False)
                 else:
                     h.unlock()
@@ -810,7 +834,7 @@ class AlternatedSGD(Optimizer):
         ## Run the compilation functions ##
         self.prepare_optimizer_compilation()
         self.compile_parameter_optimizer()
-        if self.latent_hists:
+        if self.latent_hists.values():
             self.compile_latent_optimizers()
         self.cleanup_optimizer_compilation()
 
@@ -848,7 +872,7 @@ class AlternatedSGD(Optimizer):
         ## Ensure that all latent hists are synchronized with model cur_tidx ##
         model_tidx = self.model.cur_tidx
         model_tnidx = self.model.tnidx
-        for h in self.latent_hists:
+        for h in self.latent_hists.values():
             # FIXME?: Can't use != because it compares unequal for indices from different axes
             #         I think this is required because the != test is used to determine if an
             #         AxisIndex needs to be converted when doing comparisons/arithmetic.
@@ -865,9 +889,9 @@ class AlternatedSGD(Optimizer):
         # intermediate calculations and therefore unlocked.
         # It also should not be computed further than any latent hist, since
         # it could prevent a latent hist from being computed.
-        intermediate_hists = [h for h in self.model.history_set
-                              if h.name not in [h.name for h in self.latent_hists]
-                                               + [h.name for h in self.observed_hists]]
+        latent_or_observed_hists = set(self.latent_hists) | set(self.observed_hists)
+        intermediate_hists = [h for hname, h in self.model.nested_histories.items()
+                              if hname not in latent_or_observed_hists]
         for h in intermediate_hists:
             if h.locked:
                 raise RuntimeError(
@@ -879,12 +903,12 @@ class AlternatedSGD(Optimizer):
                     f"Model {self.model.name} curtidx: {model_tidx}")
 
         ## Mark the lock state of each observed history ##
-        lock_states = {h: h.locked for h in self.observed_hists}
+        lock_states = {h: h.locked for h in self.observed_hists.values()}
         self._compile_context.lock_states = lock_states
 
         ## Fill with dummy data ##
         # Temporarily fill the observed histories with dummy data; we only need data for 2 time points
-        reset_curtidcs = {h: h.cur_tidx for h in self.observed_hists}  # Keep the curtidx so we can invalidate the dummy data once we are done.
+        reset_curtidcs = {h: h.cur_tidx for h in self.observed_hists.values()}  # Keep the curtidx so we can invalidate the dummy data once we are done.
         for h, kh in reset_curtidcs.copy().items():
             if kh < h.t0idx+2:
                 h.unlock()
@@ -918,7 +942,7 @@ class AlternatedSGD(Optimizer):
             self.model.integrate(upto=0)  # FIXME: Shouldn't this be upto=model.t0idx ?
 
         ## Lock observed histories ##
-        for h in self.observed_hists:
+        for h in self.observed_hists.values():
             if not h.locked:
                 h.lock(warn=False)
 
@@ -927,9 +951,10 @@ class AlternatedSGD(Optimizer):
         # Ensure that the latent learning rate is a dict
         # IMPORTANT: JSON only allows plain args as keys, so we use `h.name`
         if not isinstance(hyperθ['latents']['λη'], dict):
-            hyperθ['latents']['λη'] = {h.name: hyperθ['latents']['λη'] for h in self.latent_hists}
+            hyperθ['latents']['λη'] = {hname: hyperθ['latents']['λη']
+                                       for hname, h in self.latent_hists.items()}
         else:
-            if not all(h.name in hyperθ['latents']['λη'] for h in self.latent_hists):
+            if not all(hname in hyperθ['latents']['λη'] for hname in self.latent_hists):
                 raise AssertionError("Not all latent histories are listed in latent hyperparameters.")
         # Broadcast all latent learning rates to the shape of the corresponding history
         λη = hyperθ['latents']['λη']
@@ -1056,7 +1081,7 @@ class AlternatedSGD(Optimizer):
         Kθr_symb = self.Kθr_symb
 
         #### Lock latent histories ####
-        for h in self.latent_hists:
+        for h in self.latent_hists.values():
             h.lock(warn=False)
 
         #### Sanity check - differentiable update ####
@@ -1086,7 +1111,7 @@ class AlternatedSGD(Optimizer):
         if state_upds != shim.get_updates():
             raise AssertionError("State updates differ from shim updates.")
         # There should be no latents in the updates => they need to be integrated first
-        latent_data = [h._num_data for h in self.latent_hists]
+        latent_data = [h._num_data for h in self.latent_hists.values()]
         if any(v in latent_data for v in state_upds):
             raise AssertionError("Some of the state updates are for latent variables.")
 
@@ -1151,7 +1176,7 @@ class AlternatedSGD(Optimizer):
         self.model.theano_reset()
 
     @add_to('AlternatedSGD')
-    def default_param_optimizer(self, cost, parxams, λθ, **kwargs):
+    def default_param_optimizer(self, cost, params, λθ, **kwargs):
         """
         Simply calls the mackelab_toolbox.optimizers.Adam optimizer.
 
@@ -1194,7 +1219,7 @@ class AlternatedSGD(Optimizer):
         Kηr_symb = self.Kηr_symb
 
         #### Unlock latent histories ####
-        for h in self.latent_hists:
+        for h in self.latent_hists.values():
             h.unlock()
 
         #### Evaluate η (latent) updates ####
@@ -1311,7 +1336,7 @@ class AlternatedSGD(Optimizer):
             }
         """
 
-        latent_data = [h._num_data for h in self.latent_hists]
+        latent_data = [h._num_data for h in self.latent_hists.values()]
         k   = self.k
         Kηb = self.Kηb
         Kηr = self.Kηr
@@ -1326,14 +1351,14 @@ class AlternatedSGD(Optimizer):
             gη = clip_gradients(gη, clip)
             init_gη = clip_gradients(init_gη, clip)
             nodyn_gη = clip_gradients(nodyn_gη, clip)
-        gη = {h: gηh for h,gηh in zip(self.latent_hists, gη)}
-        init_gη = {h: gηh for h,gηh in zip(self.latent_hists, init_gη)}
-        nodyn_gη = {h: gηh for h,gηh in zip(self.latent_hists, nodyn_gη)}
+        gη = {h: gηh for h,gηh in zip(self.latent_hists.values(), gη)}
+        init_gη = {h: gηh for h,gηh in zip(self.latent_hists.values(), init_gη)}
+        nodyn_gη = {h: gηh for h,gηh in zip(self.latent_hists.values(), nodyn_gη)}
 
         #### Create the slices ####
         #k_indices = {h: shim.print(k.convert(h.time).data_index, message="k (data index)")  # DEBUG
-        #                + shim.print(k, message="k (anchor index)") - k for h in self.latent_hists}  # DEBUG
-        k_indices = {h: k.convert(h.time).data_index for h in self.latent_hists}
+        #                + shim.print(k, message="k (anchor index)") - k for h in self.latent_hists.values()}  # DEBUG
+        k_indices = {h: k.convert(h.time).data_index for h in self.latent_hists.values()}
             # We need to convert to .data_index ourselves, because we index directly into the underlying _num_data
         K_slices = {
             'default'  : {h: slice(kh, kh+Kηb.plain) for h,kh in k_indices.items()},
@@ -1349,12 +1374,12 @@ class AlternatedSGD(Optimizer):
 
         #### Standardize the learning rate format ####
         if not isinstance(λη, dict):
-            λη = {h: λη for h in self.latent_hists}
+            λη = {h: λη for h in self.latent_hists.values()}
         else:
             # Replace history names by the histories themselves
             λη_names = λη
             λη = {}
-            for h in self.latent_hists:
+            for h in self.latent_hists.values():
                 try:
                     λη[h] = λη_names[h.name]
                 except KeyError:
@@ -1413,13 +1438,13 @@ class AlternatedSGD(Optimizer):
                             "`cost_with_init` and `cost_without_dyn` should be 0 or `None`, "
                             f"but they are respectively '{cost_with_init}' and '{cost_without_dyn}'.")
 
-        latent_data = [h._num_data for h in self.latent_hists]
+        latent_data = [h._num_data for h in self.latent_hists.values()]
 
         #### Compute gradients wrt latent variables ####
         gη = shim.grad(cost, latent_data) # grad returns a list
         if clip:
             gη = clip_gradients(gη, clip)
-        gη = {h: gηh for h,gηh in zip(self.latent_hists, gη)}
+        gη = {h: gηh for h,gηh in zip(self.latent_hists.values(), gη)}
 
         # In a notebook, keep grad and K_slices for instrospection
         if config.diagnostic_hooks:
@@ -1427,20 +1452,20 @@ class AlternatedSGD(Optimizer):
 
         #### Standardize the learning rate format ####
         if not isinstance(λη, dict):
-            λη = {h: λη for h in self.latent_hists}
+            λη = {h: λη for h in self.latent_hists.values()}
         else:
             # Replace history names by the histories themselves
             λη_names = λη
             λη = {}
-            for h in self.latent_hists:
+            for hname, h in self.latent_hists.items():
                 try:
-                    λη[h] = λη_names[h.name]
+                    λη[h] = λη_names[hname]
                 except KeyError:
                     try:
                         λη[h] = λη['default']
                     except KeyError:
                         raise ValueError("No learning rate specified for "
-                                         f"history '{h.name}'.")
+                                         f"history '{hname}'.")
 
         #### Create the update dictionaries ####
         latent_updates = {}

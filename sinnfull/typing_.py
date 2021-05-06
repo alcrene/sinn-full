@@ -17,3 +17,12 @@ class IndexableNamespace(mtbtyping.IndexableNamespace):
     def json_encoder(cls, idxns):
         return {k:v for k,v in idxns.__dict__.items()
                 if k != '_tags' and k != '_selfrefs'}
+
+    def get_subparams(submodel):
+        subparams = {k.split('.', 1)[1]: v for k,v in self
+                     if k.split('.')[0] == submodel}
+        if subparams:
+            return IndexableNamespace(**subparams)
+        else:
+            raise AttributeError("IndexableNamespace has no parameters "
+                                 f"associated with a submodel '{submodel}'.")

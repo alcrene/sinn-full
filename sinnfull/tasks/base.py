@@ -32,7 +32,8 @@ import os
 import logging
 from warnings import warn
 from typing import (
-    Union, Optional, Callable, Generator, Iterable, Sequence, List, Tuple, Dict)
+    Union, Optional, Callable, Generator,
+    Iterable, Sequence, List, Tuple, Set, Dict)
 from pathlib import Path  # Only used for typing
 
 import theano_shim as shim
@@ -57,7 +58,7 @@ from sinnfull.sampling import SegmentSampler, FixedSegmentSampler
 from sinnfull.data import DataAccessor
 from sinnfull.data.synthetic import SyntheticDataAccessor
 from sinnfull.rng import get_seedsequence, get_np_rng, get_shim_rng, draw_model_sample
-from sinnfull.models.base import AccumulatedObjectiveFunction, Prior
+from sinnfull.models import AccumulatedObjectiveFunction, Prior, models
 from sinnfull.optim import OptimParams, Optimizer
 
 # %% tags=["remove-cell"]
@@ -78,8 +79,9 @@ __all__ = ['CreateSyntheticDataset', 'CreateFixedSegmentSampler',
 @MemoizedTask(json_encoders=sinnfull.json_encoders)
 def CreateSyntheticDataset(
     projectdir: Union[str,Path],
-    model_name: str,
-    time: TimeAxis,
+    model: Model,
+    # model_name: str,
+    # time: TimeAxis,
     prior: Prior,
     param_keys: List[Tuple[int,...]],
     sim_keys: List[Tuple[int,...]],
@@ -90,8 +92,8 @@ def CreateSyntheticDataset(
 
     Parameters
     ----------
-    model_name: Name of the model which will be simulated to generate the data.
-        Must match one of the models in ~sinnfull.models.
+    model: The `~sinnfull.models.Model` instance to use to generate
+        synthetic data.
     time: Defines the length and time step of a simulation.
     prior: Model parameters will be sampled from this object, given `param_keys`.
         Must correspond to the model set by `model_name`.
@@ -107,8 +109,8 @@ def CreateSyntheticDataset(
         If single dictionary is provided, the same initial condition
         is used for all parameter sets.
     """
-    # FIXME: Make API so we don't need to use private _load_types
-    model_cls = mtb.iotools._load_types[model_name]
+    # # FIXME: Make API so we don't need to use private _load_types
+    # model_cls = mtb.iotools._load_types[model_name]
     # We use `param_key` to sample both the parameter and initial condition
     # In order to have consistent RNG state, we sample the IC immediately
     # after the parameters, with the same RNG object
@@ -129,24 +131,26 @@ def CreateSyntheticDataset(
                 else:
                     raise ValueError("When provided as a list, `init_conds` "
                                      "must have the same length as `param_keys`.")
-        assert all(all(isinstance(v, np.array) for v in ic) for ic in init_conds)
+        assert all(all(isinstance(v, np.ndarray) for v in ic.values())
+                   for ic in init_conds), \
+               f"Initial conditions must all be arrays. Received:\n{init_conds}."
     for key in param_keys:
-        Θ = model_cls.Parameters(**prior.random(key))
+        Θ = model.Parameters(**prior.random(key))
         param_sets.append(Θ)
         if len(init_conds) < len(param_keys):
             # Normal code path
-            model_stationary = model_cls.stationary_dist(params=Θ)
+            model_stationary = model.stationary_dist(params=Θ)
                 # stationary_dist() returns a PyMC3 model
             # Use a key derived from `key` for the ICs
             init_conds.append(draw_model_sample(model_stationary, key=(*key,1)))
-    param_sets = [model_cls.Parameters(**prior.random(key))
+    param_sets = [model.Parameters(**prior.random(key))
                   for key in param_keys]
-    if hasattr(model_cls, 'remove_degeneracies'):
-        param_sets = [model_cls.remove_degeneracies(Θ) for Θ in param_sets]
+    if hasattr(model, 'remove_degeneracies'):
+        param_sets = [model.remove_degeneracies(Θ) for Θ in param_sets]
     # Just use the first key to create the RNG. It will be reseeded by the
     # DataAccessor anyway
-    rng = get_shim_rng(sim_keys[0], exists_ok=True)  # exists_ok safe because we reseed at every draw
-    model = model_cls(time=time, params=param_sets[0], rng=rng)
+    # rng = get_shim_rng(sim_keys[0], exists_ok=True)  # exists_ok safe because we reseed at every draw
+    # model = model(time=time, params=param_sets[0], rng=rng)
     seeds = [get_seedsequence(key, exists_ok=True).generate_state(1) for key in sim_keys]
     return SyntheticDataAccessor(
         projectdir, model=model, param_sets=param_sets, init_conds=init_conds, seeds=seeds)
@@ -191,13 +195,13 @@ def CreateFixedSegmentSampler(*,
 
 @NonMemoizedTask(json_encoders=sinnfull.json_encoders)
 def CreateModel(
-    time     : TimeAxis,
-    model    : str,
-    params   : IndexableNamespace,
-    rng_key  : Optional[Union[Tuple[int,...], int]] = None,
-    submodels: Optional[Dict[str,str]] = None,
-    subparams: Optional[Dict[str,IndexableNamespace]] = None,
-    connect  : Optional[Union[Dict[str,str], List[str]]] = None
+    time              : TimeAxis,
+    model_selector    : Union[str,Set[str]],
+    params            : Optional[IndexableNamespace] = None,
+    rng_key           : Optional[Union[Tuple[int,...], int]] = None,
+    submodel_selectors: Optional[Dict[str,Set[str]]] = None,
+    # subparams         : Optional[Dict[str,IndexableNamespace]] = None,
+    connect           : Optional[Union[Dict[str,str], List[str]]] = None
 ) -> Model:
     """
     Create (possibly composite) models.
@@ -222,6 +226,9 @@ def CreateModel(
     params: Parameter values for the specified model(s).
         If `models` is a list, `params` must be a list of same length:
         the n-th parameter set will be used to instantiate the n-th model.
+        If `None`, the result of `model.get_test_parameters()` is used; this
+        is useful to instantiate placeholder models for synthetic datasets,
+        where parameters may change for each trial.
     rng_key: Any value accepted by `sinnfull.rng.get_shim_rng`.
     connect: (Optional – only valid for composite models)
         Dictionary of mappings from the `History` in one model to the `History`
@@ -236,20 +243,20 @@ def CreateModel(
     ## Validation & arg standardization
     # TODO: Can we move this into the Task validation, so that it is run
     #       during Task creation rather than execution ?
-    if submodels:
-        if not isinstance(submodels, dict) or not isinstance(subparams, dict):
-            raise TypeError("Both `submodels` and `subparams` must be "
-                            "dictionaries, with keys matching the attributes "
-                            f"for the nested models in {model}.")
-        elif len(subparams) != len(submodels):
-            raise ValueError("There must be as many parameter sets as there "
-                             f"are models.\nNo. models: {len(models)} "
-                             f"({models})\nNo. parameter sets: {n_params}")
-        elif set(subparams) != set(submodels):
-            raise ValueError("The sets of submodel names and parameters don't "
-                             "have the same keys:\n"
-                             f"Submodel class name keys: {submodels.keys()}\n"
-                             f"Submodel param set keys:  {subparams.keys()}")
+    if submodel_selectors:
+        # if not isinstance(submodels, dict) or not isinstance(subparams, dict):
+        #     raise TypeError("Both `submodels` and `subparams` must be "
+        #                     "dictionaries, with keys matching the attributes "
+        #                     f"for the nested models in {model}.")
+        # elif len(subparams) != len(submodels):
+        #     raise ValueError("There must be as many parameter sets as there "
+        #                      f"are models.\nNo. models: {len(models)} "
+        #                      f"({models})\nNo. parameter sets: {n_params}")
+        # elif set(subparams) != set(submodels):
+        #     raise ValueError("The sets of submodel names and parameters don't "
+        #                      "have the same keys:\n"
+        #                      f"Submodel class name keys: {submodels.keys()}\n"
+        #                      f"Submodel param set keys:  {subparams.keys()}")
         # TODO? Check that keys correspond to composite model attributes ?
         if connect is None:
             raise TypeError("`connect` argument is required to create a "
@@ -263,13 +270,31 @@ def CreateModel(
         connect = {srchist.strip(): targethist.strip()
                    for srchist, targethist in
                    (cstr.split('->') for cstr in connect)}
+
+    ## Get model classe(s)
+    ModelClass = models[model_selector]
+    if not isinstance(ModelClass, type):
+        raise ValueError(f"Model selector {model_selector} does not match "
+                         "a unique model. The following matches were found:\n"
+                         f"{ModelClass}.")
+    if submodel_selectors:
+        submodel_classes = {subattr: models[sel]
+                           for subattr, sel in submodel_selectors.items()}
+        if not all(isinstance(subcls, type) for subcls in submodel_classes.values()):
+            match_strs = "\n".join(f"  {subattr} – {sel}: {submodel_classes[subattr]}"
+                                   for subattr, sel in submodel_selectors.items())
+            raise ValueError(f"Model selectors {submodel_selectors} don't all "
+                             "match a unique model. The following matches were "
+                             f"found:\n{match_strs}")
+
     ## Identify the lower and upper model for each connection
-    connect_by_hist = {submodel: [] for submodel in submodels}
-    inverse_submodel_mapping = {v:k for k,v in submodels.items()}
+    connect_by_hist = {submodel: [] for submodel in submodel_selectors}
+    inverse_submodel_mapping = {cls.__name__: sub_nm
+                                for sub_nm,cls in submodel_classes.items()}
         # Used to convert class names to attribute names in composite model
     # If the same class is used for more than one attribute, don't allow using
     # it, to avoid hard to track bugs.
-    cls_names = list(submodels.values())
+    cls_names = list(cls.__name__ for cls in submodel_classes.values())
     for cls_nm in list(inverse_submodel_mapping.keys()):
         if cls_names.count(cls_names) > 1:
             del inverse_submodel_mapping[cls_nm]
@@ -290,18 +315,27 @@ def CreateModel(
     # TODO: It would be nice to ensure all models connections form a DAG
 
     ## Task execution
-    ModelClass = mtb.iotools._load_types[model]
     if rng_key is not None:
         rng = get_shim_rng(rng_key, exists_ok=True)
             # Not memoizing makes exists_ok safe, as long as we use the same
             # RNG instance for each submodel
-    if submodels:
-        submodel_names = submodels
+    if params is None:
+        params = ModelClass.get_test_parameters(**submodel_classes)
+    else:
+        assert isinstance(params, IndexableNamespace)
+        # We need to do this to get the correct structure for nested params
+        params = ModelClass.Parameters(**dict(params))
+    # TODO (easy): It should suffice to do ModelClass(time, params=params, **submodel_classes, **extra_args)
+    if submodel_classes:
         submodels = {}
-        for submodel_attr in submodel_names.keys():
-            submodel_clsname = submodel_names[submodel_attr]
-            submodel_Θ = subparams[submodel_attr]
-            SubmodelClass = mtb.iotools._load_types[submodel_clsname]
+        # if subparams is None:
+        #     subparams = {}  # Will cause use of 'get_test_parameters' for each submodel
+        for submodel_attr, SubmodelClass in submodel_classes.items():
+            submodel_Θ = getattr(params, submodel_attr)
+            # if submodel_Θ is None:
+            #     submodel_Θ = SubmodelClass.get_test_parameters()
+            # elif isinstance(submodel_Θ, dict):
+            #     submodel_Θ = SubmodelClass.Parameters(**submodel_Θ)
             connected_hists = {up_hist: getattr(submodels[low_model], low_hist)
                                for low_model, low_hist, up_hist
                                in connect_by_hist[submodel_attr]}
@@ -310,7 +344,7 @@ def CreateModel(
             if 'rng' in SubmodelClass.__fields__:
                 sub_extra_args['rng'] = rng
             submodels[submodel_attr] = SubmodelClass(
-                time=time, params=SubmodelClass.Parameters(**submodel_Θ),
+                time=time, params=submodel_Θ,
                 **connected_hists, **sub_extra_args)
         extra_args = submodels
     else:
@@ -318,8 +352,7 @@ def CreateModel(
     # TODO: Check field type instead of name, to allow different name for RNG
     if 'rng' in ModelClass.__fields__:
         extra_args['rng'] = rng
-    return ModelClass(time=time, params=ModelClass.Parameters(**params),
-                      **extra_args)
+    return ModelClass(time=time, params=params, **extra_args)
 
 
 # %% [markdown]
@@ -343,19 +376,27 @@ def CreateOptimizer(
     fit_hyperparams   : dict,
     update_hyperparams: Optional[PureFunction[[AlternatedSGD],dict]],
     logp              : Optional[AccumulatedObjectiveFunction]=None,
-    logp_nodyn        : Optional[AccumulatedObjectiveFunction]=None,
+    # logp_nodyn        : Optional[AccumulatedObjectiveFunction]=None,
     logp_params       : Optional[AccumulatedObjectiveFunction]=None,
     logp_latents      : Optional[AccumulatedObjectiveFunction]=None,
-    logp_latents_nodyn: Optional[AccumulatedObjectiveFunction]=None,
+    # logp_latents_nodyn: Optional[AccumulatedObjectiveFunction]=None,
     param_optimizer   : Optional[PureFunction]=None,
     latent_optimizer  : Optional[PureFunction]=None,
     # latent_cache_path : str=".cache/latents",
     # convergence_tests : List[ConvergenceTest]=[]
 ) -> AlternatedSGD:
     """
-    This task just forwards every argument to `AlternatedSGD`.
-    The only thing it does before hand is convert `rng_key` to an RNG instance,
-    and ensure that observed histories are locked.
+    This task essentially just forwards every argument to `AlternatedSGD`.
+    In addition, it also
+
+    - converts `rng_key` to an RNG instance;
+    - adds the latent cache path to the optimizer arguments;
+        + This path is hard-coded in this Task to avoid it being serialized.
+        + The cache path is suffixed with the environment variable
+          `SMTTASK_PROCESS_NUM`, if it exists, to ensure parallel fits don't
+          share a cache.
+    - compiles the optimizer's optimization functions;
+    - ensures that observed histories are locked (by locking them if they are not).
     """
     rng = get_np_rng(rng_key)
     # latent_cache_path must not affect digest, so we hard-code it
@@ -370,8 +411,11 @@ def CreateOptimizer(
         observed_hists=observed_hists, latent_hists=latent_hists,
         prior_params=prior_params, init_params=init_params,
         fit_hyperparams=fit_hyperparams, update_hyperparams=update_hyperparams,
-        logp=logp, logp_nodyn=logp_nodyn, logp_params=logp_params,
-        logp_latents=logp_latents, logp_latents_nodyn=logp_latents_nodyn,
+        logp=logp,
+        # logp_nodyn=logp_nodyn,
+        logp_params=logp_params,
+        logp_latents=logp_latents,
+        # logp_latents_nodyn=logp_latents_nodyn,
         # logp_params_regularizer=logp_params_regularizer,
         param_optimizer=param_optimizer, latent_optimizer=latent_optimizer,
         latent_cache_path=latent_cache_path)
@@ -380,7 +424,7 @@ def CreateOptimizer(
     else:
         warn("No symbolic library has been loaded through theano_shim: "
              "it will not be possible to use this optimizer.")
-    for h in optimizer.observed_hists:
+    for h in optimizer.observed_hists.values():
         h.lock(warn=False)
     return optimizer
 
@@ -406,7 +450,7 @@ class OptimizeOutputs(TaskOutput):
 def OptimizeModel(
     nsteps    : int,
     optimizer : Optimizer,
-    recorders : Tuple[Recorder,...],
+    recorders : Union[Tuple[Recorder,...], Dict[str,Recorder]],
     convergence_tests : List[ConvergenceTest]=[],
     step_kwargs: dict={}
 ) -> OptimizeOutputs:
@@ -422,29 +466,50 @@ def OptimizeModel(
     import smttask
     from smttask.multiprocessing import get_worker_index
 
-    # Abort fit if optimizer has already failed
-    # This can happen if we restart from a previous fit.
-    if optimizer.status is OptimizerStatus.Failed:
-        outcome = f"Aborted: optimizer already failed at step {optimizer.stepi}."
-        return {'nsteps':optimizer.stepi, 'optimizer':optimizer,
-                'recorders': recorders, 'outcome': outcome}
 
     # Compile the optimizer
     if not optimizer.compiled:
         logger.info("Compiling optimization functions...")
         optimizer.compile_optimization_functions()
         logger.info("Done compiling.")
-    # Attach recorders to optimizer
-    for r in recorders:
-        optimizer.add_recorder(r)
+
+    # Abort fit if optimizer has already terminated
+    # This can happen if we restart from a previous fit.
+    if optimizer.status is OptimizerStatus.Failed:
+        outcome = f"Aborted: optimizer already failed at step {optimizer.stepi}."
+    elif (optimizer.status & OptimizerStatus.Converged) is OptimizerStatus.Converged:
+        outcome = f"Aborted: optimizer already converged at step {optimizer.stepi}."
+    else:
+        outcome = None
+    if outcome:
+        return {'nsteps':optimizer.stepi, 'optimizer':optimizer,
+                'recorders': recorders, 'outcome': outcome}
+
+    # # Attach recorders to optimizer
+    # for r in recorders:
+    #     optimizer.add_recorder(r)
+
+    # Convert Recorder tuple to Recorder dict
+    # (Remark: if we had task validators, this could nicely be done there)
+    if isinstance(recorders, tuple):
+        _recorders = {rec.name: rec for rec in recorders}
+        if len(_recorders) != len(recorders):
+            raise ValueError("Provided recorders have duplicate names:\n"
+                             f"{[rec.name for rec in recorders]}")
+        recorders = _recorders
+
     # Record the initial state
     if optimizer.stepi == 0:
         # Make an initial estimate of the latents. This is a bit wasteful if
         # there are multiple segments (another segment will be drawn), but
         # it allows to record initial values for log L, latents,
         optimizer.draw_data_segment()
-        optimizer.model.remove_degeneracies(exclude=optimizer.observed_hists)
-        optimizer.record()
+        if hasattr(optimizer.model, 'remove_degeneracies'):
+            optimizer.model.remove_degeneracies(
+                exclude=optimizer.observed_hists.values())
+        for recorder in recorders.values():
+            recorder.record(0, optimizer)
+
     # Run the optimizer for requested number of steps
     for i in tqdm(range(optimizer.stepi, nsteps),
                   desc=f"OptimizeModel {smttask.config.process_number}",
@@ -453,24 +518,27 @@ def OptimizeModel(
                   ):
         optimizer.step(**step_kwargs)  # `step()` includes a call to `record()`
         # Record current state
-        for recorder in optimizer.recorders.values():
-            if force or recorder.ready(self.stepi):
-                recorder.record(self.stepi, self)
+        for recorder in recorders.values():
+            if recorder.ready(i):
+                recorder.record(i, optimizer)
         # Check if we reached an early stopping condition
         for convergence_test in convergence_tests:
-            optimizer.status |= convergence_test(self)
+            optimizer.status |= convergence_test(recorders, optimizer)
         if (optimizer.status & OptimizerStatus.Converged) is OptimizerStatus.Converged:
             outcome = f"Terminated fit early with status <{optimizer.status}>."
             logger.info(outcome)
             optimizer.record()
             return {'nsteps': optimizer.stepi, 'optimizer': optimizer,
                     'recorders': recorders, 'outcome': outcome}
+        elif optimizer.status is OptimizerStatus.Failed:
+            break
+
     # Record the final state
     optimizer.record()
-    outcome = f"Terminated without converging. Status: <{optimizer.status}>."
-    # Remove recorders from optimizer, so they aren't saved twice
-    for r in recorders:
-        optimizer.remove_recorder(r)
+    outcome = f"Terminated without converging. Status: <{status}>."
+    # # Remove recorders from optimizer, so they aren't saved twice
+    # for r in recorders:
+    #     optimizer.remove_recorder(r)
     # Return the results in the order prescribed by OptimizeOutputs
     return {'nsteps':optimizer.stepi, 'optimizer':optimizer,
             'recorders': recorders, 'outcome': outcome}

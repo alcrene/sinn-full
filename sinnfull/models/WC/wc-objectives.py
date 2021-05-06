@@ -48,4 +48,4 @@ import theano_shim as shim
 def WC_se(self, k):
     "Squared error loss"
     u_predict = self.u_upd(self, k)
-    return -(self.u(k) - u_predict)**2
+    return -((u_predict - self.u(k))**2).sum()

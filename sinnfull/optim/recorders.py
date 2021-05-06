@@ -49,8 +49,6 @@
 #
 # ## Usage
 #
-# Models or optimizers should provide a mechanism for attaching recorders. This can be simple as a list attribute storing `Recorder` instances.
-#
 # A training routine should call the `.ready(…)` method within its training loop; whenever it returns ``True``, it should then proceed to call `.record(…)`. This allows the training routine to force recording even when the recording condition isn't met – e.g. when training terminates. For example, the following pseudo-code ensures that the initial and final states are recorded::
 #
 # ```python
@@ -377,7 +375,7 @@ class Recorder(GenericModel, Generic[ValueT]):
 
     def ready(self, step):
         """
-        This function is called by SGDOptimizer to determine whether to record.
+        This function is called to determine whether to record.
         .. note:: A better function name might be "record_condition_met", but
            I find that too verbose. If I think of a better name I may change it.
         """
@@ -620,7 +618,7 @@ class LatentsRecorder(Recorder[List[Array['float64']]]):
     def __init__(self, optimizer=None, **kwargs):
         if 'keys' not in kwargs:
             # getattr allows both str and histories
-            kwargs['keys'] = [getattr(h, 'name', h) for h in optimizer.latent_hists]
+            kwargs['keys'] = [hname for hname in optimizer.latent_hists]
         # Figure out if there is already a Θ_recorder attached to the optimizer,
         # and if so, ensure it is triggered every time we record latents
         if 'also_record' in kwargs:
@@ -648,7 +646,7 @@ class LatentsRecorder(Recorder[List[Array['float64']]]):
 
     @staticmethod
     def default_callback(optimizer):
-        return tuple(h.get_trace(include_padding=True) for h in optimizer.latent_hists)
+        return tuple(h.get_data_trace(include_padding=True) for h in optimizer.latent_hists.values())
 
 
 # %% [markdown]

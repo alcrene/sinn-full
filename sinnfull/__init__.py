@@ -43,6 +43,7 @@ from smttask.view import RecordStoreView
 from . import config
 
 logging.basicConfig()
+logging.captureWarnings(True)  # Make it equivalent to use warnings.warn or logger.warn
 logger = logging.getLogger(__name__)
 
 projectdir = Path(__file__).parent.parent

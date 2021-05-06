@@ -26,13 +26,34 @@ if __name__ == "__main__":
 import numpy as np
 import pymc3 as pm
 import theano_shim as shim
-from sinnfull.models.base import tag, Prior, PriorFactory
+from sinnfull.models.base import tag, Prior
 if __name__ == "__main__":
     from IPython.display import display
     from sinnfull.models._utils import truncated_histogram, sample_prior
 
 
 # -
+
+# :::{admonition} Definining priors
+#
+# Priors are defined by defining a [_custom PyMC3 model_](http://docs.pymc.io/api/model.html#pymc3.model.Model). Effectively this means that
+#
+# - Priors should inherit from `sinnfull.models.Prior` (which itself inherits from `pymc3.Model`).
+# - Prior distributions must be defined within an `__init__` method.
+# - The `__init__` method must accept `name` and `model` arguments, and pass them to `super().__init__`.
+# - The call `super().__init__` should be at the top.
+#
+# This means that prior definitions should look like the following:
+#
+# ```python
+# class CustomPrior(Prior):
+#     def __init__(self, prior_args, ..., name="", model=None):
+#         super().__init__(name=name, model=model)
+#         # Define prior distributions as usual below; e.g.
+#         a = pm.Normal('a')
+#         ...
+# ```  
+# :::
 
 # :::{tip}
 # The `Constant` distribution, although provided by PyMC3, was at some point [deprecated](https://github.com/pymc-devs/pymc3/pull/2452); it's not clear from the docs if it still is, but in any case it only accepts [integer values](https://github.com/pymc-devs/pymc3/issues/2451).  
@@ -44,9 +65,9 @@ if __name__ == "__main__":
 # Based on the parameters used in Rich et al. (Scientific Reports, 2019).
 
 @tag.rich
-@PriorFactory
-def WC_RichPrior(M:int):
-    with Prior() as prior:
+class WC_RichPrior(Prior):
+    def __init__(self, M:int, name="", model=None):
+        super().__init__(name=name, model=model)
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
         α = pm.Lognormal('α', np.log([100, 200]), 3, shape=(M,))
         β = pm.Lognormal('β', np.log(300.), 2, shape=(M,))
@@ -60,7 +81,6 @@ def WC_RichPrior(M:int):
                               shape=(M,M))
         w = pm.Deterministic('w', A*_w_mag)
         h = pm.Normal('h', 0., 2, shape=(M,))
-    return prior
 
 
 # + tags=["remove-input"]
@@ -77,10 +97,10 @@ if __name__ == "__main__":
 #
 # Prior with values that are all near unity. Values are otherwise arbitrary.
 
-@tag.zero_mean
-@PriorFactory
-def WC_Default(M:int):
-    with Prior() as prior:
+@tag.default
+class WC_Default(Prior):
+    def __init__(self, M:int, name="", model=None):
+        super().__init__(name=name, model=model)
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
         α = pm.Lognormal('α', -2, 3, shape=(M,))
         β = pm.Lognormal('β', 1, 2, shape=(M,))
@@ -90,7 +110,6 @@ def WC_Default(M:int):
         _w_mag = pm.Lognormal('_w', -0.5, 3, shape=(M,M))
         w = pm.Deterministic('w', A*_w_mag)
         h = pm.Normal('h', 0., 2, shape=(M,))
-    return prior
 
 
 # + tags=["remove-input"]

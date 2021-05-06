@@ -28,6 +28,7 @@ from __future__ import annotations
 
 # %% tags=["hide-input"]
 import functools
+import itertools
 from collections.abc import Callable
 from typing import TYPE_CHECKING, ClassVar, Optional, Set, List, Dict
 from pydantic import validate_arguments
@@ -56,6 +57,10 @@ from sinnfull.parameters import ParameterSet
 from sinnfull.typing_ import IndexableNamespace
 from sinnfull.rng import get_seedsequence
 from sinnfull.tags import TagDecorator
+
+# %%
+__all__ = ["Param", "Model", "Prior",
+           "ObjectiveFunction", "AccumulatedObjectiveFunction"]
 
 
 # %% [markdown] tags=["remove-cell"]
@@ -123,6 +128,24 @@ class ModelMetaclass(BaseModelMetaclass):
 class Model(sinn.Model, metaclass=ModelMetaclass):
     _compiled_functions: dict=PrivateAttr(default_factory=lambda: {})
 
+    @abc.abstractmethod
+    def initialize(self, initializer: Union[None,str,tuple,dict]=None):
+        """
+        initializer:
+            None: Defined by concrete model
+            str:
+                - 'stationary': Initialize from stationary distribution
+                - concrete models may define other accepted values
+            tuple: Initialize from stationary distribution with key `initializer`
+            dict: Should have one entry for each initializable history and
+                submodel. In composite models, can be used to specify different
+                initializers for each submodel.
+
+            With composite models, unles `initializer` is a dictionary, the
+            same initializer is passed to each submodel.
+        """
+        raise NotImplementedError
+
     # Subclasses may use instance methods if necessary
     @classmethod
     def _stationary_stats(cls, params: ModelParams):
@@ -146,7 +169,7 @@ class Model(sinn.Model, metaclass=ModelMetaclass):
 
 
     @classmethod
-    def stationary_dist(cls, params: ModelParams, seed=None):
+    def stationary_dist(cls, params: ModelParams) -> pm.Model:
         """
         Return a PyMC3 model corresponding to the process' stationary distribution
         with the current model parameters.
@@ -181,8 +204,8 @@ class Model(sinn.Model, metaclass=ModelMetaclass):
         symbolic_params = shim.is_symbolic(params)
         # Casting into cls.Parameters is important because cls.Parameters
         # might use properties to define transforms of variables
-        if not isinstance(params, cls.Parameters):
-            params = cls.Parameters(params)
+        if not isinstance(params, self.Parameters):
+            params = self.Parameters(params)
         stats = self._stationary_stats(params)
         if not symbolic_params:
             stats = shim.eval(stats)
@@ -233,6 +256,7 @@ class Model(sinn.Model, metaclass=ModelMetaclass):
 # :::
 
     # %%
+    # TODO: Mechanism to impose constraints (e.g. two submodels with same M)
     @add_to('Model')
     @classmethod
     def get_test_parameters(cls, rng: Union[None,int,RNGenerator]=None):
@@ -349,7 +373,27 @@ class Prior(PyMC_Model):
                <--------------            <---------
                 Deterministics             backward
     """
-           
+
+    # Allow tag filters to be overspecified
+    def __getattr__(self, attr):
+        if hasattr(PyMC_Model, '__getattr__'):
+            try:
+                return super().__getattr__(attr)
+            except AttributeError:
+                pass
+        if attr != '_tags' and attr in getattr(self, '_tags', set()):
+            return self
+        else:
+            raise AttributeError(
+                f"'{attr}' was not found in {type(self).__name__}.")
+
+    # Replace '_' in prefix with '.', so it matches hierarchical ParameterSet
+    # Since '.' is never used in var names, it has the advantage of allowing
+    # to split the model name.
+    @property
+    def prefix(self):
+        return f"{self.name}." if self.name else ""
+
     def no_observed_RVs(self):
         if self.observed_RVs:
             raise RuntimeError("A prior should not contain any observed RVs.\n"
@@ -384,7 +428,8 @@ class Prior(PyMC_Model):
         self.no_observed_RVs()
         var_dict = {}
         for θname in sorted(self.named_vars.keys()):
-            if not (pm.util.is_transformed_name(θname) or θname.startswith("_")):
+            if not (pm.util.is_transformed_name(θname)
+                    or θname.split('.')[-1].startswith("_")):
                 # Starting with _ is our own convention for intermediate vars
                 var_dict[θname] = self.named_vars[θname]
         return var_dict
@@ -627,8 +672,11 @@ class Prior(PyMC_Model):
         # Each sampled var will be wrapped in a list of length 1 (since we
         # asked for one sample). However constant are not returned wrapped in a
         # list, so we need to treat the two separately.
+        all_rv = {rv.name: rv for rv in
+                  itertools.chain(self.unobserved_RVs, self.observed_RVs)}
+            # NB: all_rv[θname] instead of getattr(self, θname) works even when names include '.'
         constant_names = {θname for θname in Θ
-                          if not shim.graph.symbolic_inputs(getattr(self, θname))}
+                          if not shim.graph.symbolic_inputs(all_rv[θname])}
         constants = {θname: θ for θname, θ in Θ.items()
                      if θname in constant_names}
         samples = {θname: θ for θname, θ in Θ.items()
@@ -682,30 +730,13 @@ class Prior(PyMC_Model):
             assert all(v not in rv_list for v in shim.graph.symbolic_inputs(logpt))
         return logpt
 
-# %% [markdown]
-# The `@PriorFunction` decorator is used to indicate that a function returns an instance of `Prior`.
-
-# %%
-class PriorFactory:
-    def __init__(self, f):
-        self.f = f
-        self._tags = set()
-    def __getattr__(self, attr):
-        if attr in self._tags:
-            return self
-        else:
-            raise AttributeError(
-                f"PriorFunction does not recognized the attribute '{attr}'.")
-    def __call__(self, *args, **kwargs):
-        return self.f(*args, **kwargs)
-
 
 # %% [markdown] tags=["remove-cell"]
 # PROBLEM: Serializing PureFunction includes the decorator(s). However,
 #   we don't want to include the @ObjectiveFunction decorator (tags are
-#   already stored, and could differ from those in the decorator?)  
+#   already stored, and could differ from those in the decorator?)
 # SOLUTION/HACK: Create a new PureFunction type, which wraps the json_encoder
-#   for PureFunction with another which removes lines starting with '@ObjectiveFunction'.  
+#   for PureFunction with another which removes lines starting with '@ObjectiveFunction'.
 # AND YET: Now that tags are stored with `set` instead of `frozenset`, adding
 #   tags should be harmless (unless they are dynamically removed).
 #   Keeping the hack for now since it works and I don't care to work out
@@ -795,6 +826,7 @@ class PriorFactory:
 
 # %% tags=["hide-input"]
 class PureFunctionObjective(PureFunction):
+    submodel : str=""
     @classmethod
     def validate(cls, value):  # Without this wrapper, values would be cast to PureFunction
         if isinstance(value, PureFunctionObjective):
@@ -803,6 +835,11 @@ class PureFunctionObjective(PureFunction):
             return PureFunctionObjective(value)
         else:
             return super().validate(value)
+    def __call__(self, model, *args, **kwargs):
+        if self.submodel:
+            model = getattr(model, self.submodel)
+        return super().__call__(model, *args, **kwargs)
+
 class CompositePureFunctionObjective(CompositePureFunction, PureFunctionObjective):
     @classmethod
     def validate(cls, value):
@@ -865,6 +902,10 @@ class ObjectiveFunction(BaseModel, abc.ABC, metaclass=ObjectiveFunctionMeta):
     `Regularizer`, which have different expected signatures.
     The wrapped function must match the expected signature.
 
+    Exposes a `submodel` attribute. This is used with composite model, to
+    indicate which submodel should be passed as "model" argument to the
+    objective function.
+
     TODO: Validate that the wrapped function has the expected signature.
 
     >>> from sinnfull.utils import ObjectiveFunction
@@ -883,12 +924,19 @@ class ObjectiveFunction(BaseModel, abc.ABC, metaclass=ObjectiveFunctionMeta):
     """
     func: PureFunctionObjective
     tags: Set[str]=set()
+
     # Attempting to use a tag listed in `disallowed_tags` will raise an error.
     disallowed_tags: ClassVar[set] = set()
+    # TODO: Building a smoother from forward + backward should be allowed.
+    #       So should be adding an 'se' to an 'log L' (its just no longer a 'log L' cost)
+    #       What do we want to prevent with excluded tags ?
+    #       => We need a working optimizer which actually uses a backward
+    #       objective to see how/if such exclusions should be used.
     exclusive_tags: ClassVar[List[set]] = [
-        {'forward', 'global'},
-        {'backward', 'global'},
-        {'se', 'l1', 'log L'}]
+        # {'forward', 'global'},
+        # {'backward', 'global'},
+        # {'se', 'l1', 'log L'}
+        ]
     default_tags: ClassVar[set] = set()
         # Subclasses can define default tags, which are always added unless
         # they clash with an exclusive tag
@@ -904,6 +952,7 @@ class ObjectiveFunction(BaseModel, abc.ABC, metaclass=ObjectiveFunctionMeta):
     # functions, and it must not contain variadic elements
     @abc.abstractmethod
     def __call__(self, *args):
+        # Should select submodel if `self.submodel` is not None
         return self.func(*args)
 
     ## Attributes
@@ -938,7 +987,30 @@ class ObjectiveFunction(BaseModel, abc.ABC, metaclass=ObjectiveFunctionMeta):
             return decorator  # Not an ObjectiveFunction => won't trigger __init__
         else:
             return super().__new__(cls)
-        
+
+    # Report and set the "submodel" attribute as the one of 'func'
+    # ('submodel' must be attached to 'func' in order to not be lost during
+    #  function arithmetic)
+    def __setattr__(self, attr, value):
+        if attr == "submodel":
+            self.func.submodel = value
+        else:
+            super().__setattr__(attr, value)
+    # Allow tag filters to be overspecified
+    def __getattr__(self, attr):
+        if attr == "submodel":
+            return self.func.submodel
+        if hasattr(BaseModel, '__getattr__'):
+            try:
+                return super().__getattr__(attr)
+            except AttributeError:
+                pass
+        if attr in self.tags:
+            return self
+        else:
+            raise AttributeError(
+                f"'{attr}' was not found in {type(self).__name__}.")
+
     ## Validation ##
     ## It would be convenient to be able to validate serialized strings as well,
     ## but I get "unexpected keyword argument 'value'" when I do this:
@@ -989,6 +1061,7 @@ class ObjectiveFunction(BaseModel, abc.ABC, metaclass=ObjectiveFunctionMeta):
         tags = normalized_tags
 
         return set(tags)
+
 
     ## Function arithmetic ##
     # REMARK: sinn.Model.accumulate inspects the signature of the composite
@@ -1160,7 +1233,7 @@ Regularizer.update_forward_refs()
 
 tag = TagDecorator(TypeDict({
     Model: '_tags',
+    Prior: '_tags',
     ObjectiveFunction: 'tags',
     ParameterSet: '_tags',
-    Callable: '_tags',  # Must come last, since it's the most generic
     }))

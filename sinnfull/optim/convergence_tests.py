@@ -29,11 +29,13 @@ logger = logging.getLogger(__name__)
 #
 # Convergence testing functions are boolean functions that return *True* if an optimization problem has converged, or partially converged (e.g. latents may converge before parameters). Based on the current values in one or multiple *Recorders* instances, they return one of the values defined by `~sinnfull.optim.OptimizerStatus`. The `~sinnfull.optim.Optimizer` is expected to use this value to update its status.
 #
-# All convergence tests take a single argument: `optimizer`.
+# All convergence tests take two arguments: `recorders` and `optimizer`.
+# `recorders` should be a dictionary of `Recorder` instances, with keys matching their names.
+# `optimizer` should be an `Optimizer` instance.
 #
-# Since each convergence test requires different recorders, they need to be defined when the test function is created. This is done by passing the *name* of the recorder, to avoid duplicating recorders when the `Optimizer` is serialized. The name is then used within the function to retrieve the optimizer::
+# Since each convergence test requires different recorders, they need to be defined when the test function is created. This is done by passing the *name* of the recorder, which is more robust for serialization. The name is then used within the function to retrieve the optimizer::
 #
-#     recorder = optimizer.recorders[recorder_name]
+#     recorder = recorders[recorder_name]
 #
 # All convergence tests return `NotConverged` by default, since OR-ing that value with the current status has no effect.
 
@@ -44,7 +46,7 @@ from pydantic import BaseModel, conint, PositiveFloat
 from sinn.utils.pydantic import initializer
 
 # %%
-from sinnfull.optim.base import OptimizerStatus
+from sinnfull.optim.base import OptimizerStatus, Optimizer
 from sinnfull.optim.recorders import Recorder
 
 # %%
@@ -130,9 +132,9 @@ class DivergingCost(ConvergenceTest):
     cost_recorder: str
     maximize     : bool
 
-    def __call__(self, optimizer):
+    def __call__(self, recorders: Dict[str,Recorder], optimizer: Optimizer):
         try:
-            cost_recorder = optimizer.recorders[self.cost_recorder]
+            cost_recorder = recorders[self.cost_recorder]
         except KeyError:
             logger.error("Unable to apply `DivergingCost` test: no recorder "
                          f"named '{self.cost_recorder}' exists.")
@@ -204,9 +206,9 @@ class ConstantCost(ConvergenceTest):
     tol          : PositiveFloat=0.3
     n            : conint(gt=1)
 
-    def __call__(self, optimizer):
+    def __call__(self, recorders: Dict[str,Recorder], optimizer: Optimizer):
         try:
-            cost_recorder = optimizer.recorders[self.cost_recorder]
+            cost_recorder = recorders[self.cost_recorder]
         except KeyError:
             logger.error("Unable to apply `ConstantCost` test: no recorder "
                          f"named '{self.cost_recorder}' exists.")

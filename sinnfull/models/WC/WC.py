@@ -29,12 +29,13 @@ if __name__ == "__main__":
 from typing import Any, Optional, Union
 import numpy as np
 import theano_shim as shim
-from mackelab_toolbox.typing import FloatX, Shared, Array
+from mackelab_toolbox.typing import FloatX, Shared, Array, RNGenerator
 from sinn.models import ModelParams, updatefunction, initializer
 from sinn.histories import TimeAxis, Series, AutoHist
 from sinn.utils import unlocked_hists
 
 from sinnfull.utils import add_to, add_property_to
+from sinnfull.rng import draw_model_sample
 from sinnfull.models.base import Model, Param
 
 # %%
@@ -109,7 +110,33 @@ class WilsonCowan(Model):
         return Series(name='u', time=time, shape=(M,), dtype=shim.config.floatX)
 
     def initialize(self, initializer=None):
+        # Skip any already initialized histories; in this model there is only
+        # the u history which has initial conditions.
+        if self.u.cur_tidx >= 0:
+            return
+        # Proceed with initialization
         self.u.pad(1)
+        # Generic stuff that could go in Model
+        if initializer == "stationary":
+            stat_dist = self.stationary_dist(self.params)
+            ic = draw_model_sample(stat_dist)
+        elif isinstance(initializer, tuple):
+            stat_dist = self.stationary_dist
+            ic = draw_model_sample(stat_dist, key=initializer)
+        elif isinstance(initializer, dict):
+            ic = initializer
+        else:
+            ic = None
+        if ic:
+            for k, v in initializer.items():
+                h = getattr(self,k,None)
+                if h is not None:
+                    assert isinstance(h, History)
+                    assert h.pad_left >= 1
+                    h[-1] = initializer[k]
+        # Non-generic stuff
+        else:
+            self.u[-1] = 0
 
     ## Dynamical equations ##
     def L(self, u):
@@ -122,8 +149,33 @@ class WilsonCowan(Model):
         α=self.α; β=self.β; w=self.w; h=self.h; dt=self.dt
         L=self.L; F=self.F
         u=self.u; I=self.I
+        dt = getattr(dt, 'magnitude', dt)  # In case 'dt' is a Pint or Quantities
         return u(tidx-1) + α*dt * (L(u(tidx-1)) + shim.dot(w, (F(u(tidx-1)))) + I(tidx))
 
+
+# %% [markdown]
+# :::{margin} Code `WilsonCowan`
+# Test parameters
+# :::
+
+    # %% tags=["hide-cell"]
+    @add_to('WilsonCowan')
+    @classmethod
+    def get_test_parameters(cls, rng: Union[None,int,RNGenerator]=None):
+        rng = np.random.default_rng(rng)
+        #M = rng.integers(1,5)
+        M = 2  # Currently no way to ensure submodels draw the same M
+        A = np.concatenate((np.ones(M//2, dtype='int16'),
+                            -np.ones(M//2, dtype='int16')))
+        _w_mag = rng.lognormal(-0.5, 3, size=(M,M))
+        Θ = cls.Parameters(
+            α = rng.lognormal(-2, 3, size=(M,)),
+            β = rng.lognormal(1, 2, size=(M,)),
+            w = A*_w_mag,
+            h = rng.normal(0., 2, size=(M,)),
+            M = M
+        )
+        return Θ
 
 # %% [markdown]
 # ### Analytics and stationary state

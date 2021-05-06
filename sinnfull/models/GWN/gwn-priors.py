@@ -28,12 +28,34 @@ if __name__ == "__main__":
 # %% tags=["hide-input"]
 import numpy as np
 import pymc3 as pm
-from sinnfull.models.base import tag, Prior, PriorFactory
+from sinnfull.models.base import tag, Prior
 import theano_shim as shim
 if __name__ == "__main__":
     from IPython.display import display
     from sinnfull.models._utils import truncated_histogram, sample_prior
 
+
+# %% [markdown]
+# :::{admonition} Definining priors
+#
+# Priors are defined by defining a [_custom PyMC3 model_](http://docs.pymc.io/api/model.html#pymc3.model.Model). Effectively this means that
+#
+# - Priors should inherit from `sinnfull.models.Prior` (which itself inherits from `pymc3.Model`).
+# - Prior distributions must be defined within an `__init__` method.
+# - The `__init__` method must accept `name` and `model` arguments, and pass them to `super().__init__`.
+# - The call `super().__init__` should be at the top.
+#
+# This means that prior definitions should look like the following:
+#
+# ```python
+# class CustomPrior(Prior):
+#     def __init__(self, prior_args, ..., name="", model=None):
+#         super().__init__(name=name, model=model)
+#         # Define prior distributions as usual below; e.g.
+#         a = pm.Normal('a')
+#         ...
+# ```  
+# :::
 
 # %% [markdown]
 # :::{tip}
@@ -46,13 +68,13 @@ if __name__ == "__main__":
 
 # %%
 @tag.default
-@PriorFactory
-def GWN_Prior(M:int, mu_mean=0., mu_std=1., logsigma_mean=0., logsigma_std=1.):
-    with Prior() as prior:
+class GWN_Prior(Prior):
+    def __init__(self, M:int, mu_mean=0., mu_std=1., logsigma_mean=0., logsigma_std=1.,
+                 name="", model=None):
+        super().__init__(name=name, model=model)
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
         μ = pm.Normal('μ', mu_mean, mu_std, shape=(M,))
         logσ = pm.Normal('logσ', logsigma_mean, logsigma_std, shape=(M,))
-    return prior
 
 
 # %% tags=["remove-input"]
@@ -70,14 +92,14 @@ if __name__ == "__main__":
 
 # %%
 @tag.zero_mean
-@PriorFactory
-def GWN_ZeroMeanPrior(M:int, logsigma_mean=0., logsigma_std=1.):
-    with Prior() as prior:
+class GWN_ZeroMeanPrior(Prior):
+    def __init__(self, M:int, logsigma_mean=0., logsigma_std=1.,
+                        name="", model=None):
+        super().__init__(name=name, model=model)
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
         pm.Deterministic('μ', shim.broadcast_to(
             shim.constant(0, dtype=shim.config.floatX), (M,)))
         logσ = pm.Normal('logσ', logsigma_mean, logsigma_std, shape=(M,))
-    return prior
 
 
 # %% tags=["remove-input"]

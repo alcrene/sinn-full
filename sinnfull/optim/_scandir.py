@@ -33,10 +33,14 @@ def add_pset(pset, extra_tags=frozenset()):
     # to define them.
     # The '_tags' value is removed, so that changing tags doesn't affect hashes
     tags = set(pset.pop('_tags', ()))   # Not impossible that o._tags be a frozen set or list
+    if not tags:
+        tags = set(pset.pop('tags', ()))
     tags.update(extra_tags)
     h = stabledigest(pset)
     paramsets[h] = pset
     pset_tags[h] = pset_tags.get(h, set()).union(tags)
+    # Add _tags back, to allow overspecifying tag filters
+    pset._tags = pset_tags[h]
 
 def get_objs_from_namespace(model_name, ns):
     for nm, o in ns.__dict__.items():
@@ -71,3 +75,6 @@ for p in os.listdir(root):
 
 
 paramsets = TaggedCollection((paramsets[k], pset_tags[k]) for k in paramsets)
+paramsets.append((str(root), {"basepath"}))
+    # Add basepath for all paramsets, which is needed to load paramsets
+    # with references

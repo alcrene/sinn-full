@@ -109,7 +109,7 @@ Alternatively, browse the files in the [_models_](./sinnfull/models/index) direc
 
 ### Create your own models
 
-Copy one of the model definition files, e.g. [_white_noise.py_](./sinnfull/models/white_noise.py), and change as required.
+Copy one of the model definition files, e.g. the [Wilson Cowan model](./sinnfull/models/WC/WC.py), and change as required.
 
 ### Create new analysis tasks
 

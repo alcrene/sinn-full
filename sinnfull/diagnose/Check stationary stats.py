@@ -131,7 +131,7 @@ for hist, stats in all_stats.items():
 panels = []
 for hist in all_stats:
     # Add one curve per history component
-    p = hv.Overlay([hv.Curve(zip(hist.time_stops, hist.get_trace(idx)),
+    p = hv.Overlay([hv.Curve(zip(hist.time_stops, hist.get_data_trace(idx)),
                              kdims=['t'], vdims=[f"{hist.name}_[{str(idx).strip('(),')}]"],
                              label=f"{hist.name}[{str(idx).strip('()')}]")
                     for idx in np.ndindex(hist.shape)],
