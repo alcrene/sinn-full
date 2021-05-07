@@ -69,7 +69,7 @@ if __name__ == "__main__":
 # %%
 @tag.default
 class GWN_Prior(Prior):
-    def __init__(self, M:int, mu_mean=0., mu_std=1., logsigma_mean=0., logsigma_std=1.,
+    def __init__(self, M:int, mu_mean=0., mu_std=3., logsigma_mean=0., logsigma_std=1.5,
                  name="", model=None):
         super().__init__(name=name, model=model)
         pm.Deterministic('M', shim.constant(M, dtype='int16'))

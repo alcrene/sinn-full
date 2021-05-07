@@ -16,39 +16,13 @@
     'λη' : 0.001,  # In units of stationary std dev
     'clip': 100.,  # Maximum increment is approx clip*λη
   },
-'T'  : Parameter(20, units='s'),
-'Δt' : Parameter(2**-5, units='s', type='float64'),
-'Tθb': Parameter(1, units='s'),
-'Tθr': Parameter(1, units='s'),
+'T'  : Parameter(2, units='s'),
+'Δt' : Parameter(2**-10, units='s', type='float64'),  # ~ 1ms
+'Tθb': Parameter(2**-5, units='s'),
+'Tθr': Parameter(2**-5, units='s'),
 'Nθb': 10,
-'Tηb': Parameter(20, units='s'),
+'Tηb': Parameter(1, units='s'),
 'Tηr': Parameter(0, units='s'),
-'Nηb': 100,
+'Nηb': 20,
 
-'θ_mask':
-  {
-  'inputs':
-    {
-    'M'     : False,
-    'Mtilde': False,
-    'μtilde': True,
-    'τtilde': True,
-    'σtilde': True,
-    'Wtilde': True,
-    },
-  'dynamics':
-    {
-    'M'     : False,
-    'β'     : True,
-    'w'     : True,
-    'h'     : True,
-    },
-  'observations':
-    {
-    'N'     : False,
-    'γbar'  : True,
-    'Wbar'  : False,  # Derived from γbar
-    'Σbar'  : True
-    }
-  },
 }

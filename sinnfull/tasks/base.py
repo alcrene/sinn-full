@@ -38,6 +38,7 @@ from pathlib import Path  # Only used for typing
 
 import theano_shim as shim
 import numpy as np
+from pydantic import StrictStr
 
 # %% tags=["hide-input"]
 import smttask
@@ -196,12 +197,14 @@ def CreateFixedSegmentSampler(*,
 @NonMemoizedTask(json_encoders=sinnfull.json_encoders)
 def CreateModel(
     time              : TimeAxis,
-    model_selector    : Union[str,Set[str]],
+    model_selector    : Union[Dict[StrictStr,Union[Dict[StrictStr,Tuple[StrictStr,...]],
+                                                   Tuple[StrictStr,...]]],
+                              Tuple[StrictStr,...]],
     params            : Optional[IndexableNamespace] = None,
     rng_key           : Optional[Union[Tuple[int,...], int]] = None,
-    submodel_selectors: Optional[Dict[str,Set[str]]] = None,
+    #submodel_selectors: Optional[Dict[str,Set[str]]] = None,
     # subparams         : Optional[Dict[str,IndexableNamespace]] = None,
-    connect           : Optional[Union[Dict[str,str], List[str]]] = None
+    #connect           : Optional[Union[Dict[str,str], List[str]]] = None
 ) -> Model:
     """
     Create (possibly composite) models.
@@ -216,13 +219,24 @@ def CreateModel(
     Parameters
     ----------
     ...
-    models: The model to create, or a list of models to compose.
-        When composing models, the order matters: going from left to right,
-        in must be possible to instantiate the n-th model using only the
-        histories of the preceding models as inputs.
-        In other words, model dependencies (as specified by `connect`) must
-        form a DAG, and the order of `models` should start with the root nodes
-        of the DAG.
+    model_selector: selector, or dictionary of selectors.
+
+        - For simple models, a tag selector (i.e. set of strings) which
+          uniquely specifies a model in `sinnfull.models.models`.
+        - For composite models, a dictionary containing:
+          + `"__root__"`: The tag selector for the root model.
+          + `"__connect__"`: A list of history connections between models.
+            (see below)
+          + `submodel: selector` pairs: Tag selectors for the submodels.
+
+        Note:
+
+        - At present it is not possible for a submodel to itself be composite.
+        - The order of submodels matters: in must be possible to instantiate the
+          n-th model using only the histories of the preceding models as inputs.
+          In other words, model dependencies (as specified by `connect`) must
+          form a DAG, and the order of `models` should start with the root nodes
+          of the DAG.
     params: Parameter values for the specified model(s).
         If `models` is a list, `params` must be a list of same length:
         the n-th parameter set will be used to instantiate the n-th model.
@@ -230,19 +244,32 @@ def CreateModel(
         is useful to instantiate placeholder models for synthetic datasets,
         where parameters may change for each trial.
     rng_key: Any value accepted by `sinnfull.rng.get_shim_rng`.
-    connect: (Optional – only valid for composite models)
-        Dictionary of mappings from the `History` in one model to the `History`
-        in another. Mapping should be in the direction
-        `{lower_model.history_name: upper_model.history_name}`, where
-        `lower_model` refers to the model which can be computed without the
-        “upper” model. To avoid having to remember the key-value direction, an
-        alternative notation is also accepted, where each pairing is specified
-        as a single string: `"lower_model.history_name -> upper_model.history_name"`.
-        These strings should then be passed in a list.
+
+    The `__connect__` dictionary
+    ----------------------------
+    Selectors for composite models must contain a `__connect__` entry.
+    This must be either a dictionary or a list of mappings from the `History` in
+    one model to the `History` in another. Mapping should be in the direction
+    `{lower_model.history_name: upper_model.history_name}`, where
+    `lower_model` refers to the model which can be computed without the
+    “upper” model. To avoid having to remember the key-value direction, the
+    alternative list notation accepts expects each pairing to be specified
+    as a single string: `"lower_model.history_name -> upper_model.history_name"`.
     """
     ## Validation & arg standardization
     # TODO: Can we move this into the Task validation, so that it is run
     #       during Task creation rather than execution ?
+    # TODO: Allow for nested composite models
+    if isinstance(model_selector, dict):
+        root_selector = model_selector["__root__"]
+        submodel_selectors = {k:sel for k,sel in model_selector.items()
+                              if not k.startswith("__")}
+        connect = model_selector["__connect__"]
+    else:
+        root_selector = model_selector
+        submodel_selectors = None
+        connect = None
+
     if submodel_selectors:
         # if not isinstance(submodels, dict) or not isinstance(subparams, dict):
         #     raise TypeError("Both `submodels` and `subparams` must be "
@@ -266,15 +293,15 @@ def CreateModel(
             raise TypeError("`connect` argument is only valid when creating a "
                             "composite model.")
     # Parse special List[str] syntax for `connect`
-    if isinstance(connect, list):
+    if isinstance(connect, (tuple,list)):
         connect = {srchist.strip(): targethist.strip()
                    for srchist, targethist in
                    (cstr.split('->') for cstr in connect)}
 
-    ## Get model classe(s)
-    ModelClass = models[model_selector]
+    ## Get model class(es)
+    ModelClass = models[root_selector]
     if not isinstance(ModelClass, type):
-        raise ValueError(f"Model selector {model_selector} does not match "
+        raise ValueError(f"Model selector {root_selector} does not match "
                          "a unique model. The following matches were found:\n"
                          f"{ModelClass}.")
     if submodel_selectors:

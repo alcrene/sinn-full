@@ -276,6 +276,12 @@ else:
             # fails on {'a': {'b': 1}} vs {'a': 1}
             return mackelab_toolbox.parameters._dict_diff(self, other)
 
+        def copy(self):
+            """
+            Change `copy` to return a shallow copy at all hierarchical levels.
+            """
+            return ParameterSet(self.flatten())
+
         def __getattr__(self, attr):
             if hasattr(_parameters.ParameterSet, '__getattr__'):
                 try:

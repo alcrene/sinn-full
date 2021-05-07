@@ -27,8 +27,8 @@
 # :::{figure-md} optimize-wf-flowchart  
 # <img src="optimize-wf-flowchart.svg" title="Flowchart – Optimize Task workflow">
 #
-# Flowchart – Optimize Task workflow
-# <a href="https://mermaid-js.github.io/mermaid-live-editor/#/edit/eyJjb2RlIjoiZmxvd2NoYXJ0IFREXG4gICAgc3ViZ3JhcGggd29ya2Zsb3dbT3B0aW1pemUgVGFzayBXb3JrZmxvd11cbiAgICBkaXNrZGF0YVtvbi1kaXNrIGRhdGFdXG4gICAgc3ludGhkYXRhW3N5bnRoZXRpYyBkYXRhXVxuICAgIGNkYXRhe3tjcmVhdGUgZGF0YSBhY2Nlc3Nvcn19XG4gICAgY21vZGVse3tjcmVhdGUgbW9kZWx9fVxuICAgIGNwcmlvcihbY3JlYXRlIHByaW9yXSlcbiAgICBjaW5pdChbY2hvb3NlIGluaXRpYWwgcGFyYW1zXSlcbiAgICBjb2JqKFtjaG9vc2Ugb2JqZWN0aXZlXSlcbiAgICBjaHlwZXIoW2Nob29zZSBoeXBlcnBhcmFtdGVyc10pXG4gICAgY29wdGltaXplcnt7Y3JlYXRlIG9wdGltaXplcn19XG4gICAgY3JlY3t7Y3JlYXRlIHJlY29yZGVyc319XG4gICAgY3Rlc3QoW2NyZWF0ZSBjb252ZXJnZW5jZSB0ZXN0c10pXG4gICAgY29wdGltaXple3tvcHRpbWl6ZSBtb2RlbH19XG4gICAgZGlza2RhdGEgLS4tPiBjZGF0YVxuICAgIHN5bnRoZGF0YSAtLi0-IGNkYXRhXG4gICAgY3ByaW9yIC0uLT4gc3ludGhkYXRhXG4gICAgY21vZGVsIC0uLT4gc3ludGhkYXRhXG4gICAgY3ByaW9yIC0tPiBjb3B0aW1pemVyXG4gICAgY2h5cGVyIC0uLT52aHlwZXIoW3ZhbGlkYXRlIGh5cGVycGFyYW1ldGVyc10pXG4gICAgY2RhdGEgJiBjaW5pdCAmIGNtb2RlbCAmIGNvYmogJiB2aHlwZXIgLS0-IGNvcHRpbWl6ZXJcbiAgICBjb3B0aW1pemVyICYgY3JlYyAmIGN0ZXN0IC0tPiBjb3B0aW1pemVcbiAgICBlbmRcblxuICAgIHN0eWxlIGNvcHRpbWl6ZSBmaWxsOiNjZGU0ZmYsIHN0cm9rZTojMTQ3ZWZmLCBzdHJva2Utd2lkdGg6MnB4XG4gICAgc3R5bGUgd29ya2Zsb3cgZm9udC13ZWlnaHQ6Ym9sZFxuIiwibWVybWFpZCI6e30sInVwZGF0ZUVkaXRvciI6ZmFsc2V9">
+# **Flowchart – Optimize Task workflow** Hexagonal nodes indicate steps executed as [Tasks] (../tasks/index) during workflow _execution_. Elliptical nodes are implemented within the workflow itself and executed during its _creation_.
+# <a href="https://mermaid.ink/img/eyJjb2RlIjoiZmxvd2NoYXJ0IFREXG4gICAgc3ViZ3JhcGggd29ya2Zsb3dbT3B0aW1pemUgVGFzayBXb3JrZmxvd11cbiAgICBkaXNrZGF0YVtvbi1kaXNrIGRhdGFdXG4gICAgc3ludGhkYXRhW3N5bnRoZXRpYyBkYXRhXVxuICAgIGNkYXRhe3tjcmVhdGUgZGF0YSBhY2Nlc3Nvcn19XG4gICAgY3NhbXBsZXJ7e2NyZWF0ZSBkYXRhXFxuc2VnbWVudCBzYW1wbGVyfX1cbiAgICBjbW9kZWx7e2NyZWF0ZSBtb2RlbH19XG4gICAgY3ByaW9yKFtjcmVhdGUgcHJpb3JdKVxuICAgIGNpbml0KFtjaG9vc2UgaW5pdGlhbCBwYXJhbXNdKVxuICAgIGNvYmooW2Nob29zZSBvYmplY3RpdmVdKVxuICAgIGNoeXBlcihbY2hvb3NlIGh5cGVycGFyYW10ZXJzXSlcbiAgICBjb3B0aW1pemVye3tjcmVhdGUgb3B0aW1pemVyfX1cbiAgICBjcmVjW2NyZWF0ZSByZWNvcmRlcnNdXG4gICAgY3Rlc3QoW2NyZWF0ZSBjb252ZXJnZW5jZSB0ZXN0c10pXG4gICAgY29wdGltaXple3tvcHRpbWl6ZSBtb2RlbH19XG4gICAgZGlza2RhdGEgLS4tPiBjZGF0YVxuICAgIHN5bnRoZGF0YSAtLi0-IGNkYXRhXG4gICAgY3ByaW9yIC0uLT4gc3ludGhkYXRhXG4gICAgY21vZGVsIC0uLT4gc3ludGhkYXRhXG4gICAgY3ByaW9yIC0tPiBjb3B0aW1pemVyXG4gICAgY2h5cGVyIC0uLT52aHlwZXIoW3ZhbGlkYXRlIGh5cGVycGFyYW1ldGVyc10pXG4gICAgY2RhdGEgLS0-IGNzYW1wbGVyXG4gICAgY3NhbXBsZXIgJiBjaW5pdCAmIGNtb2RlbCAmIGNvYmogJiB2aHlwZXIgLS0-IGNvcHRpbWl6ZXJcbiAgICBjb3B0aW1pemVyICYgY3JlYyAmIGN0ZXN0IC0tPiBjb3B0aW1pemVcbiAgICBlbmRcblxuICAgIHN0eWxlIGNvcHRpbWl6ZSBmaWxsOiNjZGU0ZmYsIHN0cm9rZTojMTQ3ZWZmLCBzdHJva2Utd2lkdGg6MnB4XG4gICAgc3R5bGUgd29ya2Zsb3cgZm9udC13ZWlnaHQ6Ym9sZFxuIiwibWVybWFpZCI6e30sInVwZGF0ZUVkaXRvciI6ZmFsc2V9">
 #     (edit)
 # </a>  
 # :::
@@ -68,7 +68,7 @@ import sinnfull.models
 import sinnfull.optim
 from sinnfull import ureg
 from sinnfull.parameters import ParameterSet
-from sinnfull.models import TimeAxis, models, objectives, priors, ObjectiveFunction
+from sinnfull.models import TimeAxis, models, ObjectiveFunction
 #from sinnfull.data.synthetic import SyntheticDataAccessor
 #from sinnfull.sampling import sample_baseline_segment
 
@@ -108,42 +108,109 @@ model_rngkey = 1
 optimizer_rngkey = 2
 param_rngkey = 3   # Base key: keys are generator as (param_key, i)
 sim_rngkey = 4     # Base key: keys are generator as (sim_key, i)
+sampler_rngkey = 5
 
-# Values are tag selectors
-model_selector      = {'ObservedDynamics'}
-submodel_selectors  = {'input'   : {'GaussianWhiteNoise'},
-                       'dynamics': {'WilsonCowan'}}  # List of sets of strings
-submodel_connections= ['GaussianWhiteNoise.ξ -> WilsonCowan.I']
-observed_hists=['dynamics.u']
+# Values are tag selectors; selectors are always sets of strings.
+# model_selector may be either a single select (i.e. set of tags)
+# or a dictionary with entries matching submodels (+ __root__ and __connect__)
+# If there are submodels, the __connect__ entry indicates how their histories
+# relate. It should be a list of strings.
+model_selector      = {'__root__'   : {'ObservedDynamics'},
+                       'input'      : {'GaussianWhiteNoise'},
+                       'dynamics'   : {'WilsonCowan'},
+                       '__connect__': ['GaussianWhiteNoise.ξ -> WilsonCowan.I']}
+observed_hists=['dynamics.u']  # Use dotted names to denote histories in submodels
 latent_hists  =['input.ξ']
 
 from sinnfull.optim import paramsets as optim_paramsets
-default_learning_params = optim_paramsets['WC'].default   # Defined in [projectdir]/sinnfull/optim/paramsets
+default_hyperparams = optim_paramsets['WC'].default   # Defined in [projectdir]/sinnfull/optim/paramsets
 
-# Values are tag selectors; objectives are summed
-# Selectors are always sets.
-# They can be within dicts (to apply them to submodels)
-# or lists (to indicate multiple objectives)
+# Values are tag selectors.
+# Selectors are always sets of strings;
+# they can be within dicts (to apply them to submodels)
+# or lists (to indicate multiple objectives).
 # All objectives are ultimately summed together
 # (Future: we may add notation for coefficients multiplying objectives)
 objective_selectors = {'input': {'GaussianWhiteNoise'},
                        'dynamics': {'WilsonCowan', 'se'}}
 params_objective  = None  # None = use default_objective
 latents_objective = None  # None = use default_objective
-subpriors = ParameterSet(
-    {'input': {'selector': {'GWN', 'default'}, 'kwds': dict(M=2)},
-     'dynamics': {'selector': {'WC', 'default'}, 'kwds': dict(M=2)}
+prior_spec = ParameterSet(
+    {'input': {'selector': {'GWN', 'default'},
+               'kwds': dict(mu_mean=[-0.25, -0.5],
+                            logsigma_mean=[-1., -1.],
+                            M=2)},
+     'dynamics': {'selector': {'WC', 'rich'}, 'kwds': dict(M=2)}
     })
     # NB: Different priors may have different parameters
 
+synth_param_spec = prior_spec.copy()  # Requires sinnfull.ParameterSet
+synth_param_spec.update({'input.kwds.mu_std': 1.,        # Tip: Use dotted notation to avoid
+                         'input.kwds.logsigma_std': .5}) # quashing other params
+    
 exec_environment = "module"   # Changed to 'papermill' by sinnfull.utils.generate_task_from_nb
 
-# %%
-ModelClass = models[model_selector]
+# %% [markdown]
+# **Conversion of papermill string arguments to objects**  
+# To avoid dealing with serialization, the papermill arguments which should be Python objects are instead passed as strings. But this means we have to decode them.
 
+# %%
+from ast import literal_eval
+if Θ_init_key[0] == '(':
+    Θ_init_key = literal_eval(Θ_init_key)
+g = globals()
+for param in ['default_hyperparams', 'fit_hyperθ_updates',
+              'synth_param_spec', 'prior_spec',
+              'model_selector',  'objective_selectors']:
+    pval = g[param]
+    if isinstance(pval, str):
+        pval = literal_eval(pval)
+    elif isinstance(pval, dict):
+        for k, v in pval.items():
+            if isinstance(v, str):
+                pval[k] = literal_eval(v)
+    g[param] = pval
+# JSON converts sets into lists. Convert them back to sets/tuples.
+for param in ['model_selector', 'objective_selectors',
+              'synth_param_spec', 'prior_spec']:
+    pval = g[param]
+    if isinstance(pval, dict):
+        pval = ParameterSet(pval)
+        for k, v in pval.flat():
+            if isinstance(v, str):
+                literal_eval(v)
+            if 'kwds' not in k and isinstance(v, list):
+                v = tuple(v)
+            pval[k] = v
+    g[param] = pval
+
+# %% [markdown]
+# An (experimental) alternative to using papermill to execute the notebook, is to use the function
+#
+# ```python
+# sinnfull.utils.run_as_script('sinnfull.workflows.Optimize_task_template',
+#                              param1=value1, ...)
+# ```
+#
+# This places parameter values in a global dictionary (`sinnfull.utils.script_args`), which the code below retrieves.
+
+# %%
+if __name__ != "__main__":
+    # Running within an import
+    #  - if run through `utils.run_as_script`, there will be parameters in `utils.script_args`
+    #    which should replace the current values
+    from sinnfull.utils import script_args
+    if __name__ in script_args:
+        g = globals()
+        # One of the script_args will set exec_environment = "script"
+        for k, v in script_args[__name__].items():
+            if k in g:
+                g[k] = v
 
 # %%
 # TODO: -> Move to utils
+from typing import List
+from sinnfull.models import objectives, ObjectiveFunction
 def get_objectives(objective_selectors) -> List[ObjectiveFunction]:
     """
     This function looks complicated, but it's just a series of `if` statements
@@ -178,49 +245,48 @@ def get_objectives(objective_selectors) -> List[ObjectiveFunction]:
 
 
 # %%
+from typing import Type
+import pymc3 as pm
+from sinnfull.parameters import ParameterSet
+from sinnfull.models import priors, Model, Prior
+def get_prior(model_class: Type[Model], prior_spec: dict):
+    """
+    model_class: The model class for which to build the prior.
+    prior_selector:
+        dict: priors for submodels.
+              Must have an entry 'selector'.
+              May have an entry 'kwds'.
+    """
+    prior_spec = ParameterSet(prior_spec)
+    with Prior() as prior:
+        # TODO: Expose a public attribute on the model class
+        #      (.nested_models is only defined on instances)
+        for submodel_nm in model_class._model_identifiers:
+            subprior = prior_spec[submodel_nm]
+            priors[subprior.selector](**subprior.kwds, name=submodel_nm)
+    return prior
+
+
+# %% [markdown]
+# Retrieve the model.
+
+# %%
+if isinstance(model_selector, (set,str)):
+    ModelClass = models[model_selector]
+else:
+    ModelClass = models[model_selector['__root__']]
+
+# %% [markdown]
+# Retrieve all the objectives and sum them.
+
+# %%
 default_objective = sum(get_objectives(objective_selectors))
 
 # %% [markdown]
-# if not isinstance(default_objective, list):
-#     default_objective = []
-# for objective in default_objective:
-#     
-#     # Multiple objectives: add them
-#     default_objective = sum(objectives[sel] for sel in default_objective)
-# else:
-#     # Only one objective
-#     default_objective = objectives[default_objective]
+# Retrieve the parameter distribution used to generate synthetic data. This can be the same as the prior, but if the prior is broad, it can be a good idea to sample the data parameters from tighter distributions.
 
 # %%
-with Prior() as prior:
-    # TODO: Expose a public attribute on the model class
-    #      (.nested_models is only defined on instances)
-    for submodel_nm in ModelClass._model_identifiers:
-        subprior = subpriors[submodel_nm]
-        priors[subprior.selector](**subprior.kwds, name=submodel_nm)
-
-# %% [markdown]
-# An alternative to using papermill to execute the notebook, is to use the function
-#
-# ```python
-# sinnfull.utils.run_as_script('sinnfull.workflows.Optimize_task_template',
-#                              param1=value1, ...)
-# ```
-#
-# The places parameter values in a global dictionary (`sinnfull.utils.script_args`), which the code below retrieves.
-
-# %%
-if __name__ != "__main__":
-    # Running within an import
-    #  - if run through `utils.run_as_script`, there will be parameters in `utils.script_args`
-    #    which should replace the current values
-    from sinnfull.utils import script_args
-    if __name__ in script_args:
-        g = globals()
-        # One of the script_args will set exec_environment = "script"
-        for k, v in script_args[__name__].items():
-            if k in g:
-                g[k] = v
+synth_param_dist = get_prior(ModelClass, synth_param_spec)
 
 # %%
 if __name__ == "__main__" and exec_environment == "module":
@@ -236,37 +302,11 @@ if exec_environment == "notebook":
     hv.extension('bokeh')
 
 # %% [markdown]
-# **Conversion of papermill string arguments to objects**
-# To avoid dealing with serialization, the papermill arguments which should be Python objects are instead passed a string matching their identifier. For models, this works because subclasses of `~sinn.models.Model` register themselves to `mackelab_toolbox.iotools`.
-
-# %% [markdown]
-# # These imports only used for parameter conversion
-# import mackelab_toolbox as mtb
-# import mackelab_toolbox as iotools
-# import sinnfull.models
-# from sinnfull.models.base import AccumulatedObjectiveFunction
-# from ast import literal_eval as make_tuple
-#
-# if isinstance(model, str):
-#     model_name = model
-#     ModelClass = mtb.iotools._load_types[model_name]
-# else:
-#     ModelClass = type(model)
-#     model_name = ModelClass.__name__
-# if Θ_init_key[0] == '(':
-#     Θ_init_key = make_tuple(Θ_init_key)
-# if isinstance(default_objective, str):
-#     default_objective = AccumulatedObjectiveFunction.parse_raw(default_objective)
-# if isinstance(nodyn_objective, str):
-#     nodyn_objective = AccumulatedObjectiveFunction.parse_raw(nodyn_objective)
-# prior = Prior.validate(prior)
-
-# %% [markdown]
 # ## Load hyperparameters
 # Start by loading the file containing defaults, then replace those values given in `fit_hyperθ_updates`.
 
 # %%
-fit_hyperparams = ParameterSet(default_learning_params,
+fit_hyperparams = ParameterSet(default_hyperparams,
                                basepath=sinnfull.optim.paramsets.basepath)
 recursive_dict_update(fit_hyperparams, fit_hyperθ_updates, allow_new_keys=True)  # Notebook parameter
 fit_units = fit_hyperparams.units
@@ -291,10 +331,8 @@ time = TimeAxis(min=0, max=T, step=Δt, unit=fit_units['[time]'])
 synthdata_model = CreateModel(
     time              = time,
     model_selector    = model_selector,
-    params            = None,  # None => Will use model.get_test_parameters()
-    rng_key           = (sim_rngkey,0),  # Just use the first key; reseeds when sampling dataset anyway
-    submodel_selectors= submodel_selectors,
-    connect           = submodel_connections
+    params            = None,  # Just pick anything to instantiate the model (Uses model.get_test_parameters().)
+    rng_key           = (sim_rngkey,0)  # Just use the first key; reseeds when sampling dataset anyway
 )
 
 # %%
@@ -304,44 +342,36 @@ data = CreateSyntheticDataset(
     model     =synthdata_model,
     #model_name=model_name,
     #time      =time,
-    prior     =prior,
+    prior     =synth_param_dist,
     param_keys=[(param_rngkey,i) for i in range(1)],
     sim_keys  =[(sim_rngkey,i) for i in range(1)],
     init_conds = {'dynamics.u': 0}
 )
 
 # %% [markdown]
-# rundata = data.run()
-#
-# #dir(rundata.model.Parameters)
-#
-# trial = rundata.trials.trial.data[0]
-#
-# rundata.load(trial)
-#
-# trial
-
-# %% [markdown]
-# rundata.model
-
-# %% [markdown]
 # The `SegmentSampler` creates an infinite iterator which provides a new segment on every call.
-# The `trial_filter` argument is passed to `data.sel(...)`, and allows to restrict segments to
+#
+# - `trial_filter` argument is passed to `data.sel(...)`, and allows to restrict segments to
 # certain trials, or certain time windows.
+# - `t0` and `T` are used to select a fixed window to sample from.
 
 # %%
+t0 = 1*ureg.s
 segment_iterator = CreateFixedSegmentSampler(
-    data=data, trial_filter={},
-    t0=0*ureg.s, T=fit_hyperparams.T*ureg.s, rng_key=(5,))
+    data=data,
+    trial_filter={},
+    t0=t0, T=fit_hyperparams.T*ureg.s-t0,
+    rng_key=(sampler_rngkey,)
+)
 
 # %% [markdown]
 # It's a very good idea to have a look at the synthetic data before committing CPU time to fitting it. Once you are confident the generated data is as expected, replace `True` by `False` to avoid plotting it unnecessarily.
 
-# %%
-hv.renderer('bokeh').theme = 'dark_minimal'
+# %% [markdown] tags=["remove-cell"]
+#     hv.renderer('bokeh').theme = 'dark_minimal'
 
 # %%
-if False and exec_environment == "notebook":
+if True and exec_environment == "notebook":
     seg_iter = segment_iterator.run()
     sampled_segment = next(iter(seg_iter))[2]
 
@@ -393,19 +423,30 @@ if False and exec_environment == "notebook":
 # - file name: Load parameters from provided file.
 
 # %%
+prior = get_prior(ModelClass, prior_spec)
+
+# %%
 valid_options = ['ground truth', 'file', 'test']
 if isinstance(Θ_init_key, tuple):
     Θ_init = prior.random(Θ_init_key, space='optim')
+    modelΘ_init = prior.backward_transform_params(Θ_init)
 elif Θ_init_key == 'ground truth':
-    Θ_init = prior.random((param_rngkey,0), space='optim')
+    Θ_init = synth_param_dist.random((param_rngkey,0), space='optim')
+    modelΘ_init = synth_param_dist.backward_transform_params(Θ_init)
+elif isinstance(Θ_init_key, set):
+    # Parameter set selector
+    from sinnfull.models import paramsets
+    modelΘ_init = paramsets[Θ_init_key]
 elif os.exists(Θ_init_key):
     # Untested
-    Θ_init = ParameterSet(Θ_init_key)
+    modelΘ_init = ParameterSet(Θ_init_key)
 else:
     raise ValueError(f"Unrecognized value for `Θ_init_key`: {Θ_init_key} (type: {type(Θ_init_key)}\n"
                      f"It should be either an RNG key (int tuple), or one of {valid_options}")
 
 # %% [markdown]
+# :::{note}
+# :dropdown:  
 # Setting the initialization with ground truth works because it is equivalent to
 #
 # - draw values directly in the model space;
@@ -419,7 +460,8 @@ else:
 #     prior.random((0,), space='optim'))
 # assert all(np.all(np.isclose(model_θ[nm], backtransformed_θ[nm]))
 #            for nm in model_θ)
-# ```
+# ```  
+# :::
 
 # %% [markdown]
 # Store numeric values, so
@@ -427,25 +469,21 @@ else:
 # - it doesn't matter _how_ we generated the initialization parameters, just what their values are.
 
 # %%
-if hasattr(Θ_init, 'get_values'):
-    Θ_init = Θ_init.get_values()
+if hasattr(modelΘ_init, 'get_values'):
+    modelΘ_init = modelΘ_init.get_values()
 
 # %% [markdown]
 # ## Instantiate the model
 #
 # Having chosen initial parameters `Θ_init`, instantiate the model. The `rng_key` seeds the RNG used to integrate the model.
 
-# %% [markdown]
-# modelΘ_init = ModelClass.Parameters(**modelΘ_init)
-
 # %%
-modelΘ_init = prior.backward_transform_params(Θ_init)
 model = CreateModel(time              = time,
                     model_selector    = model_selector,
                     params            = modelΘ_init,
-                    rng_key           = (model_rngkey,),
-                    submodel_selectors= submodel_selectors,
-                    connect           = submodel_connections)
+                    rng_key           = (model_rngkey,))
+                    #submodel_selectors= submodel_selectors,
+                    #connect           = submodel_connections)
 
 # %% [markdown]
 # ## Define the optimizer
@@ -704,7 +742,7 @@ if exec_environment != "notebook":
 # ::::
 
 # %%
-if False and exec_environment == "notebook":
+if True and exec_environment == "notebook":
     optimize.draw()
 
 # %% [markdown]

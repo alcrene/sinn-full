@@ -52,12 +52,12 @@ if __name__ == "__main__":
 #         # Define prior distributions as usual below; e.g.
 #         a = pm.Normal('a')
 #         ...
-# ```  
+# ```
 # :::
 
 # :::{tip}
-# The `Constant` distribution, although provided by PyMC3, was at some point [deprecated](https://github.com/pymc-devs/pymc3/pull/2452); it's not clear from the docs if it still is, but in any case it only accepts [integer values](https://github.com/pymc-devs/pymc3/issues/2451).  
-# The better alternative is thus to use `Deterministic`, which has the benefit of not showing up as a variable to optimize.  
+# The `Constant` distribution, although provided by PyMC3, was at some point [deprecated](https://github.com/pymc-devs/pymc3/pull/2452); it's not clear from the docs if it still is, but in any case it only accepts [integer values](https://github.com/pymc-devs/pymc3/issues/2451).
+# The better alternative is thus to use `Deterministic`, which has the benefit of not showing up as a variable to optimize.
 # :::
 
 # ## Rich prior
@@ -87,7 +87,7 @@ class WC_RichPrior(Prior):
 if __name__ == "__main__":
     prior = WC_RichPrior(2)
     display(prior)
-    
+
     display(sample_prior(prior).cols(3))
 
 
@@ -116,7 +116,7 @@ class WC_Default(Prior):
 if __name__ == "__main__":
     prior = WC_Default(2)
     display(prior)
-    
+
     display(sample_prior(prior).cols(3))
 # -
 
@@ -133,12 +133,10 @@ if __name__ == "__main__":
     Prior.json_encoder(prior)  # Smoke test: serialization of prior
     WilsonCowan.Parameters(**prior.random((4,1)))
         # Smoke test: generated prior is compatible with model
-        
+
     prior = WC_Default(2)
     prior.random((4,1))        # Smoke test: `random()` works
     Prior.json_encoder(prior)  # Smoke test: serialization of prior
     WilsonCowan.Parameters(**prior.random((4,1)))
         # Smoke test: generated prior is compatible with model
 # -
-
-

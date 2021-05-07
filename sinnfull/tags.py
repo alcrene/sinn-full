@@ -202,7 +202,7 @@ class TaggedCollection(list):
             return [x[0] for x in super().__getitem__(key)]
         else:
             raise TypeError(f"Invalid key type {type(key)} – should be str, "
-                            "Set[str], int or slice")
+                            f"Set[str], int or slice\nReceived: {key}.")
     def __contains__(self, key):
         return key in self.values
 

@@ -385,8 +385,9 @@ class AlternatedSGD(Optimizer):
         Rule: batched updates are used if the batch size and batch relaxation
         sizes sum to less than the data size.
         """
-        return (self.fit_hyperparams['Tηb'] + self.fit_hyperparams['Tηr']
-                < self.fit_hyperparams['T'])
+        Tηb = self.fit_hyperparams['Tηb'] * self.model.time.unit
+        Tηr = self.fit_hyperparams['Tηr'] * self.model.time.unit
+        return Tηb + Tηr < self.data_segments.T
 
     def dict(self, *args, **kwargs):
         """

@@ -52,7 +52,8 @@ __all__ = ['WilsonCowan']
 ## Wilson-Cowan dynamical model
 
 $\newcommand{\tag}[1]{\qquad\text{(#1)}}$
-We take the following Wilson-Cowan model
+The following form of the Wilson-Cowan model is based on the one used by [Rich et al. (2020)](https://www.nature.com/articles/s41598-020-72335-6).
+
 :::{math}
 :label: eq:wc-def
 \begin{aligned}
@@ -60,6 +61,7 @@ We take the following Wilson-Cowan model
 α_i^{-1} \frac{d}{dt}{u}^i &= L[{u}^i] + {w}_e^{i} F^e[{u}^e] + {w}_i^{i} F^i[{u}^i] + I^i(t) \,;
 \end{aligned}
 :::
+
 where
 \begin{align}
 F_j[u] &= (1 + \exp[-β^j(u - h^j)])^{-1} \,, \\

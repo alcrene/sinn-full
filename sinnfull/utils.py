@@ -63,6 +63,10 @@ get_field_values(records: Sequence[NamedTuple]) -> Dict[str,list]:
     Find all unique field values from a list of named tuples.
     Returns {field name: field values}.
 
+def model_name_from_selector(model_selector: dict) -> str:
+    Return a string summarizing the model described by `model_selector`.
+    E.g. "ObservedDynamics[GaussianWhiteNoise,WilsonCowan]"
+
 Task creation
 -------------
 generate_task_from_nb(input_path: str, *, parameters: ParameterSet, exec_environment: str, return_val: str, ...) -> Task | taskdesc (JSON) | notebook | None
@@ -73,6 +77,11 @@ papermill_parameter_block(parameters: ParameterSet):
     Print the parameters as they would be passed to papermill, in a block
     that can be pasted into the target notebook.
 
+def run_as_script(module_name: str, package: str=None, **parameters):
+    Import (or reload) a module, effectively executing it as a script.
+    Experimental alternative to papermill, which runs the notebook in the same
+    thread. This avoids the need to serialize arguments and allows debugging.
+    
 """
 
 # %%
@@ -385,6 +394,49 @@ def get_field_values(records: Sequence[NamedTuple]) -> Dict[str,list]:
     fields = records[0]._fields
     return {field: sorted(set(key[i] for key in records))
             for i, field in enumerate(fields)}
+
+# %%
+def model_name_from_selector(model_selector: dict) -> str:
+    """
+    Return a string summarizing the model described by `model_selector`.
+    Useful for automatically generated metadata or labels.
+    Legibility is preferred over preciseness, so submodel fields are omitted.
+
+    E.g. return value: "ObservedDynamics[GaussianWhiteNoise,WilsonCowan]"
+    """
+    from sinnfull.tasks import CreateModel
+    from sinnfull.models import models
+
+    if isinstance(model_selector, dict):
+        root_selector = model_selector["__root__"]
+        submodel_selectors = {k:sel for k,sel in model_selector.items()
+                              if not k.startswith("__")}
+    else:
+        root_selector = model_selector
+        submodel_selectors = None
+
+    ## Get model class(es)
+    ModelClass = models[root_selector]
+    if not isinstance(ModelClass, type):
+        raise ValueError(f"Model selector {root_selector} does not match "
+                         "a unique model. The following matches were found:\n"
+                         f"{ModelClass}.")
+    if submodel_selectors:
+        submodel_classes = {subattr: models[sel]
+                           for subattr, sel in submodel_selectors.items()}
+        if not all(isinstance(subcls, type) for subcls in submodel_classes.values()):
+            match_strs = "\n".join(f"  {subattr} – {sel}: {submodel_classes[subattr]}"
+                                   for subattr, sel in submodel_selectors.items())
+            raise ValueError(f"Model selectors {submodel_selectors} don't all "
+                             "match a unique model. The following matches were "
+                             f"found:\n{match_strs}")
+    model_str = ModelClass.__name__
+    if submodel_classes:
+        model_str += '[' + \
+                     ','.join(SubmodelClass.__name__
+                              for SubmodelClass in submodel_classes.values()) \
+                     + ']'
+    return model_str
 
 # %% [markdown]
 # ---------------
