@@ -352,8 +352,7 @@ data = CreateSyntheticDataset(
 # %% [markdown]
 # The `SegmentSampler` creates an infinite iterator which provides a new segment on every call.
 #
-# - `trial_filter` argument is passed to `data.sel(...)`, and allows to restrict segments to
-# certain trials, or certain time windows.
+# - `trial_filter` argument is passed to `data.sel(...)`, and allows to restrict segments to certain trials. It can also be used to restrict time windows, but for this purpose `t0` and `T` are more convenient.
 # - `t0` and `T` are used to select a fixed window to sample from.
 
 # %%

@@ -171,7 +171,7 @@ class FixedSegmentSampler(SegmentSampler):
     """
     Select one of the trials randomly (uniformly), and return the data
     segment sliced between `t0` and `t0 + T`.
-    
+
     The window `[t0, t0+T]` is fixed at instance creation, hence the name.
 
     Parameters
@@ -207,8 +207,11 @@ class FixedSegmentSampler(SegmentSampler):
         time_unit = segment.time.unit
         if isinstance(time_unit, str):
             time_unit = ureg(time_unit)
-        tslice = slice(get_magnitude(t0, in_units_of=time_unit),
-                       get_magnitude(T,  in_units_of=time_unit))
+        t0 = t0.astype(segment.time.dtype)  # Especially important if t0
+        T  =  T.astype(segment.time.dtype)  # and T are specified as ints
+        t0 = get_magnitude(t0, in_units_of=time_unit)
+        T  = get_magnitude(T,  in_units_of=time_unit)
+        tslice = slice(t0, t0+T)
         return trial.key, tslice, segment.sel(time=tslice)
 
 

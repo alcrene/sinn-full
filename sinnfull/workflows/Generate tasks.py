@@ -143,7 +143,7 @@ params = []
 # %%
 prior = priors[model_name].default(M=1)
 params = [
-    dict(reason=f"Example - {model_name} model"
+    dict(reason=f"Example fit - {model_name} model"
          task_save_location = task_save_location + f"/n{nsteps}",
          nsteps=nsteps,
          fit_hyperθ_updates={'params': {'λθ':λθ, 'clip': θ_clip, 'b1': 1., 'b2': 1.},
