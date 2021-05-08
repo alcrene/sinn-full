@@ -582,13 +582,46 @@ class AlternatedSGD(Optimizer):
             # Changing the data segment requires:
             #   - Replacing all the data in the observed hists with that in the segment
             #   - Loading the current estimate of the latent history for that segment.
+            # NB: We need to use some of the observed data to set the
+            #     initial conditions (ICs) of the observed histories.
+            #     This means that for histories which don't need ICs (or not
+            #     as many), we must discard those time points.
+            #     This also means that we can't integrate the model all
+            #     the way to the end.
+            max_pad_left = max(h.pad_left for h in self.observed_hists.values())
+                # We need this much of the initial data points to initialize
+            K_padded = self.model.time.Index.Delta(len(data.time))
+                # The number of time bins we have
+                # Some of these will be used to set ICs (i.e. the padding bins)
+            K = K_padded - max_pad_left
+                # The unpadded number of time bins
+            # TODO: assert data.time.dt == self.model.time.dt
+            # TODO: Match data.time to h.time ?
             for h in self.observed_hists.values():
                 assert h.locked
                 h.unlock()
-                h[h.t0idx:] = data[h.name]  # I think initial conditions are not observed by definition ?
-                h.lock(warn=False)          # If we are setting latents to 'observed' (e.g. to fit
-                                            # on ground truth), their initial cond is not returned
-                                            # by the SyntheticDataAccessor, nor is it needed.
+                Δi = max_pad_left - h.pad_left
+                h[:h.t0idx+K] = data[h.name][Δi:]
+                    # NB: By using AxisIndex objects here, we make use of
+                    # AxisIndex's validation to ensure each history uses
+                    # the right padding and goes exactly up to K.
+                    # For the difference between axis and data indices, see
+                    # https://sinn.readthedocs.io/en/latest/axis.html#indexing
+                h.lock(warn=False)
+                # Remark: If we are setting latents to 'observed' (e.g. to fit
+                # on ground truth), their initial cond is not returned by the
+                # SyntheticDataAccessor, nor is it needed. In this case
+                # Δi is equal to self.model.pad_left.
+
+            # Observed histories may not have been set all the way to their end,
+            # but they should all be in sync
+            cur_tidx = h.cur_tidx
+                # NB: We can use `cur_tidx` as an arg to `integrate`, because
+                # it's an AxisIndex and thus will be appropriately shifted.
+                # But it's numerical value depends on the amound of padding
+                # on h.
+            assert all(h.cur_tidx - h.t0idx + 1 == K
+                       for h in self.observed_hists.values())
 
             ## Initialize model and set the latents ##
             # TODO: If we have multiple segments in the same trial, they should share a cache
@@ -601,15 +634,17 @@ class AlternatedSGD(Optimizer):
                     h.unlock()
                 # TODO: What if initialize can take arguments ?
                 # TODO: How do we set initial conditions ?
+                # (Remark: these questions aren't crucial, since the latent,
+                #  including its IC, will be inferred)
                 self.model.clear()
                 self.model.initialize()
-                self.model.integrate(upto='end', histories=self.latent_hists.values())
+                self.model.integrate(upto=cur_tidx, histories=self.latent_hists.values())
                 for h in self.latent_hists.values():
                     #if was_locked[h]:
                     h.lock(warn=False)
                 # Initialize the cache
                 # This is not strictly necessary, but avoids not saving the
-                # latents at all when `udpate_latents` is False.
+                # latents at all when `update_latents` is False.
                 self.latent_cache[segmentkey] = utils.dataset_from_histories(
                     self.latent_hists.values())
                 self.model.clear()
@@ -667,8 +702,15 @@ class AlternatedSGD(Optimizer):
                     "non-symbolic values.") from e
 
         ## Do updates ##
-        K = next(iter(self.observed_hists.values())).unpadded_length  # We need the data length for sample_batch_starts
-        assert all(K == h.unpadded_length for h in self.observed_hists.values())
+        # We need the data length (K) for `sample_batch_starts`
+        # This length is typically less than unpadded_length, because of ICs
+        # on observed histories (see `draw_data_segment`)
+        # K = next(iter(self.observed_hists.values())).unpadded_length
+        # assert all(K == h.unpadded_length for h in self.observed_hists.values())
+        h = next(iter(self.observed_hists.values()))
+        K = h.cur_tidx - h.t0idx + 1
+        assert all(K == (h.cur_tidx - h.t0idx + 1) <= h.unpadded_length
+                   for h in self.observed_hists.values())
         rng=self.rng
 
         #### Do parameter updates ####
@@ -701,8 +743,10 @@ class AlternatedSGD(Optimizer):
                     update_η(bηs, Kηb, Kηr)
                 self.update_η['leftmost'](bη[0], Kηb, Kηr)
             else:
-                assert np.can_cast(self.model.time.unpadded_length, Kηb.dtype)
-                Kηb = self.model.time.unpadded_length.astype(Kηb.dtype)
+                # assert np.can_cast(self.model.time.unpadded_length, Kηb.dtype)
+                # Kηb = self.model.time.unpadded_length.astype(Kηb.dtype)
+                assert np.can_cast(K, Kηb.dtype)
+                Kηb = K.astype(Kηb.dtype)
                 update_η = self.update_η['default']
                 for step in range(Nηb):
                     update_η(self.model.t0idx, Kηb, 0)

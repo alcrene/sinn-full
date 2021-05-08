@@ -318,7 +318,7 @@ def dataset_from_histories(histories: Iterable) -> xr.Dataset:
     for h in histories:
         # Use the same time array for all history DataArrays
         if time_array is None:
-            time_array = xr.DataArray(h.time.stops_array,
+            time_array = xr.DataArray(h.time_stops,
                                       name='time',
                                       dims=['time'],
                                       attrs={'dt': h.time.dt,

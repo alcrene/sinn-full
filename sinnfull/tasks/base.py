@@ -562,7 +562,7 @@ def OptimizeModel(
 
     # Record the final state
     optimizer.record()
-    outcome = f"Terminated without converging. Status: <{status}>."
+    outcome = f"Terminated without converging. Status: <{optimizer.status}>."
     # # Remove recorders from optimizer, so they aren't saved twice
     # for r in recorders:
     #     optimizer.remove_recorder(r)
