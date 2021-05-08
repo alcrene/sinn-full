@@ -334,9 +334,7 @@ class Optimizer(BaseModel, abc.ABC):
         the hyperparams that were originally passed as arguments
         """
         Store = namedtuple('Store', ['observed_hists', 'latent_hists'])
-        store = Store(self.observed_hists, self.latent_hists,
-                      self.logp_params, self.logp_latents,
-                      self.logp_latents_nodyn)
+        store = Store(self.observed_hists, self.latent_hists)
         self.observed_hists = list(self.observed_hists.keys())
         self.latent_hists = list(self.latent_hists.keys())
 
