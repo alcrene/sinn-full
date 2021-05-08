@@ -13,8 +13,8 @@
 import json
 
 # %%
-taskfile1 = "/path/to/project/sinnfull/workflows/tasklist/OptimizeModel__6e091e77ff__nsteps_5000.taskdesc.json"
-taskfile2 = "/path/to/project/sinnfull/workflows/tasklist/OptimizeModel__244934ad8f__nsteps_5000.taskdesc.json"
+taskfile1 = "../workflows/tasklist/n5000/OptimizeModel__543fa9d7eb__nsteps_5000.taskdesc.json"
+taskfile2 = "../workflows/tasklist/n5000/OptimizeModel__d5cb560448__nsteps_5000.taskdesc.json"
 
 # %%
 with open(taskfile1) as f:

@@ -890,10 +890,15 @@ class AlternatedSGD(Optimizer):
         # intermediate calculations and therefore unlocked.
         # It also should not be computed further than any latent hist, since
         # it could prevent a latent hist from being computed.
-        latent_or_observed_hists = set(self.latent_hists) | set(self.observed_hists)
-        intermediate_hists = [h for hname, h in self.model.nested_histories.items()
-                              if hname not in latent_or_observed_hists]
-        for h in intermediate_hists:
+        # NB: self.model.nested_histories returns duplicates, if a history is
+        #     part of more than one submodel. We use id(h) to ensure that
+        #     a) we only keep one copy in intermediate_hists
+        #     b) any copy is recognized as part of latent_or_observed_hists, if applicable
+        latent_or_observed_hists = set(id(h) for h in self.latent_hists.values()) \
+                                   | set(id(h) for h in self.observed_hists.values())
+        intermediate_hists = {id(h): h for h in self.model.nested_histories.values()
+                              if id(h) not in latent_or_observed_hists}
+        for h in intermediate_hists.values():
             if h.locked:
                 raise RuntimeError(
                     f"AlternatedSGD: History {h.name} is locked, but not listed as observed.")

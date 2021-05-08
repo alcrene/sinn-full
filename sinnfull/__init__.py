@@ -32,15 +32,19 @@ from mackelab_toolbox.cgshim import shim, typing as mtbtyping
 from mackelab_toolbox.utils import sentinel
 from pathlib import Path
 from types import SimpleNamespace
+
+from . import config
+from . import utils
+
 # NB: To avoid issues, holoviews must be imported before
 # django (which smttask indirectly imports) (noted with holoviews 1.14.3)
-import holoviews
+if utils.in_ipython():
+    import holoviews
 
 import smttask
 import smttask.view
 from smttask.view import RecordStoreView
 
-from . import config
 
 logging.basicConfig()
 logging.captureWarnings(True)  # Make it equivalent to use warnings.warn or logger.warn

@@ -156,9 +156,12 @@ class DataAccessor(abc.ABC):
     @abc.abstractmethod
     def metadata_filename(self) -> str:
         """
-        Class attribute. It should take the form "pre_{subject}_post", i.e.
-        it should include a placeholder named 'subject', to be replaced by
-        the subject's label.
+        Class attribute. It should take the form of a formattable string
+        with placeholders matching trial keys. For example, if metadata files
+        are named by joining the string “metadata_” with the trial's 'subject'
+        attribute, `metadadata_filename` would be equal to "metadata_{subject}".
+
+        See `get_metadata_files`.
         """
         pass
 
@@ -204,13 +207,12 @@ class DataAccessor(abc.ABC):
             coords={'trialkey': keyindex}
         )
         # self.trials = pd.DataFrame(columns=['filename', 'trial'])
-        self.subjects = {}
         self.set_sumatra_directory(sumatra_project)
         if datadir is not None:
             self.scan_directory(datadir)
 
     def set_sumatra_directory(self, path=None):
-        if len(self.trials.trialkey) + len(self.subjects) > 0:
+        if len(self.trials.trialkey) > 0:
             warn("Changing the Sumatra project while data is already loaded "
                  "leads to undefined behaviour.")
         if path is None:
@@ -325,14 +327,7 @@ class DataAccessor(abc.ABC):
     ## Runtime object inspection ##
 
     def __str__(self):
-        overall_summary = f"{len(self.subjects)} subjects, " \
-                          f"{len(self.trials)} total trials"
-        subject_summaries = [
-            f"Subject {subject.label}: {len(subject.channels)} channels, "
-            f"{len(self.trials.sel(subject=subject.label))} seizure events."
-            for subject in self.subjects.values()
-        ]
-        return overall_summary + "\n" + "\n".join(subject_summaries)
+        return f"{type(self).__name__}{len(self.trials)} total trials"
 
     ## Begin actual methods ##
 
@@ -375,25 +370,91 @@ class DataAccessor(abc.ABC):
             assert all(t_idx not in self.trials.trialkey for t_idx in trials.index)
         self.trials = xr.merge((self.trials, xr.Dataset(trials)))
 
-    def get_subject_metadata_files(self, trials) -> Generator:
+    def get_metadata_files(self, trials: Union[pd.DataFrame,xr.Dataset],
+                           group_by: Union[Sequence[str], str]
+        ) -> Generator:
         """
-        .. note: The location of the subject metadata is determined by finding
-        the common parent to all that subject's trials, and appending the
+        Retrieve metadata files.
+
+        Metadata files have a one to many relationship with data files
+        (e.g., muliple trials may be linked to one metadata file giving
+        subject age and condition).
+
+        Trials are grouped by the values in `group_by`: each value must
+        correspond to a Trial attribute. It should be the case that for each
+        trial in the same group, `metadata_filename` is the same. In general
+        this means that the names in `group_by` should match those of the
+        substitution string `metadata_filename`.
+
+        .. Note: The location of the metadata is determined by finding
+        the common parent directory to the trials in a group, and appending the
         class variable in `DataAcessor.metadata_filename`.
+
+        :returns: Generator of metadata file names, one per group.
         """
+        # TODO?: Allow not specifying `group_by`, and then group together trials
+        # which return the same `metadata_filename` ?
         if isinstance(trials, xr.Dataset):
             trials = trials.to_dataframe()
+        if isinstance(group_by, str):
+            group_by = [group_by]
 
-        for label in trials.index.get_level_values('subject').unique():
-            # Get all datadirs containing data for this subject
-            datadirs = [trial.datadir for trial in trials.xs('NA').trial]
-            # Find common root dir
+        labels = itertools.product(
+            *(trials.index.get_level_values(subidx_name).unique()
+              for subidx_name in group_by))
+
+        for lbl_tuple in labels:
+            ## Get all datadirs matching the group_by fields
+            filtered_trials = trials
+            # FIXME: should be possible to filter on each subindex simultaneously
+            lbl_dict = {subidx_name: subidx_val
+                        for subidx_val, subidx_name in zip(lbl_tuple, group_by)}
+            for subidx_name, subidx_val in lbl_dict.items():
+                filtered_trials = filtered_trials.xs(subidx_val, level=subidx_name)
+            # Since `labels` is obtained by an outer product, it is very
+            # possible that some combinations match no trial at all.
+            if len(filtered_trials) == 0:
+                continue
+            datadirs = [trial.datadir for trial in filtered_trials.trial]
+            ## Find common root dir
             datadir = os.path.commonpath(datadirs)
-            # Filename is set by class variable, which has a placeholder for 'subject'
-            filename = self.metadata_filename.format(subject=label)
+            ## Filename is set by class variable, which has placeholders for trial keys
+            filename = self.metadata_filename.format(**lbl_dict)
             path = self.inputroot/datadir/filename
             if not os.path.exists(path):
                 raise FileNotFoundError(
-                    f"The channel metada for subject {label} was not found at "
-                    f"at the location '{path.absolute()}'.")
-            yield label, path
+                    f"The metadata file for trials matching {lbl_dict} was not "
+                    f"found at the location '{path.absolute()}'.")
+            yield lbl_tuple, path
+
+    # def get_metadata_files(self, trials) -> Generator:
+    #     """
+    #     NOTE: Untested
+    #
+    #     Alternative implementation that simply groups trials based on those
+    #     producing the same metadata filename.
+    #
+    #     .. Note: The location of metadata files is determined by finding
+    #     the common parent to all trials , and appending the
+    #     class variable in `DataAcessor.metadata_filename`.
+    #     """
+    #     if isinstance(trials, xr.Dataset):
+    #         trials = trials.to_dataframe()
+    #
+    #     metadata_filenames = defaultdict(lambda: [])
+    #     for trial in trials.index:
+    #         fname = self.metadata_file.format(**trial.dict())
+    #         metadata_filenames[fname].append(trial)
+    #
+    #     for filename, trial_subset in metadata_filenames:
+    #         # Get all datadirs containing data for this subset of trials
+    #         datadirs = [trial.datadir for trial in trial_subset]
+    #         # Find common root dir
+    #         datadir = os.path.commonpath(datadirs)
+    #         path = self.inputroot/datadir/filename
+    #         if not os.path.exists(path):
+    #             raise FileNotFoundError(
+    #                 f"The metadata for trial {trial_subset[0]}"
+    #                 f"{' (and others)' if len(trial_subset) > 1 else ''} was "
+    #                 f"not found at the location '{path.absolute()}'.")
+    #         yield label, path

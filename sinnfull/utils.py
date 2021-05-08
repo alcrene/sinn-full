@@ -81,7 +81,7 @@ def run_as_script(module_name: str, package: str=None, **parameters):
     Import (or reload) a module, effectively executing it as a script.
     Experimental alternative to papermill, which runs the notebook in the same
     thread. This avoids the need to serialize arguments and allows debugging.
-    
+
 """
 
 # %%
@@ -91,9 +91,6 @@ from __future__ import annotations
 from warnings import warn
 from collections.abc import Iterable
 import xarray as xr
-import theano_shim as shim
-import mackelab_toolbox as mtb
-import mackelab_toolbox.utils
 
 # %% [markdown]
 # DEVNOTE: Imports specific to a section may be placed at the top of that
@@ -370,6 +367,8 @@ def recursive_set_value(orig: dict, update_dict: dict, allow_new_keys: bool=Fals
     are shared variables, use `set_value` instead of assignment.
     Returns `None`: Updates are done in place.
     """
+    import theano_shim as shim
+
     for k, v in update_dict.items():
         if k in orig and isinstance(v, dict) and isinstance(orig[k], dict):
             recursive_set_value(orig[k], v, allow_new_keys)
@@ -447,27 +446,33 @@ def model_name_from_selector(model_selector: dict) -> str:
 import os
 import tempfile
 from pathlib import Path
-import smttask
-from mackelab_toolbox.pymc_typing import PyMC_Model
+# from mackelab_toolbox.pymc_typing import PyMC_Model
 
 # %%
-import json
-from pydantic import BaseModel
-from sinnfull import json_encoders
 
 # %%
+json_encoder_fn = None
+def get_json_encoder_fn():
+    import json
+    from pydantic import BaseModel
+    from sinnfull import json_encoders
+    global json_encoder_fn
+
+    if not json_encoder_fn:
+        class DummyModel(BaseModel):
+            class Config:
+                json_encoders = json_encoders
+        json_encoder_fn = DummyModel.__json_encoder__
+        # json_encoders = {
+        #     ObjectiveFunction: lambda objective_function: objective_function.json(),
+        #     PyMC_Model: PyMC_Model.json_encoder
+        # }
+    return json_encoder_fn
+
 default_output_nb = os.path.join(tempfile.gettempdir(), "out.ipynb")
 default_task_save_location = os.path.join(tempfile.gettempdir(), "sinnfull_tmp_task")
 # To get around papermill attempting to convert all arguments to JSON,
 # these types are serialized before calling `papermill.execute_notebook()`
-class DummyModel(BaseModel):
-    class Config:
-        json_encoders = json_encoders
-json_encoder_fn = DummyModel.__json_encoder__
-# json_encoders = {
-#     ObjectiveFunction: lambda objective_function: objective_function.json(),
-#     PyMC_Model: PyMC_Model.json_encoder
-# }
 
 # %%
 def generate_task_from_nb(
@@ -554,6 +559,7 @@ def generate_task_from_nb(
 
     """
     import papermill  # Import here to avoid required always requiring papermill dependency
+    import smttask    # Keep anything not "builtin" from the global module imports
 
     parameters['exec_environment'] = exec_environment
     task_save_location = parameters.get('task_save_location', default_task_save_location)
@@ -568,11 +574,11 @@ def generate_task_from_nb(
     # Sanitize parameters
     for k, v in parameters.items():
         if isinstance(v, BaseModel):
-            parameters[k] = v.json(encoder=json_encoder_fn)
+            parameters[k] = v.json(encoder=get_json_encoder_fn())
         else:
             for T, encoder in json_encoders.items():
                 if isinstance(v, T):
-                    parameters[k] = json.dumps(v, default=json_encoder_fn)
+                    parameters[k] = json.dumps(v, default=get_json_encoder_fn())
                     break
 
     # Monkey patch to prevent papermill from saving notebook
@@ -642,11 +648,11 @@ def papermill_parameter_block(parameters: ParameterSet):
     # Sanitize parameters
     for k, v in parameters.items():
         if isinstance(v, BaseModel):
-            ps_str[k] = "'''"+v.json(encoder=json_encoder_fn)+"'''"
+            ps_str[k] = "'''"+v.json(encoder=get_json_encoder_fn())+"'''"
         else:
             for T, encoder in json_encoders.items():
                 if isinstance(v, T):
-                    ps_str[k] = "'''"+json.dumps(v, default=json_encoder_fn)+"'''"
+                    ps_str[k] = "'''"+json.dumps(v, default=get_json_encoder_fn())+"'''"
                     break
             else:
                 ps_str[k] = repr(v)

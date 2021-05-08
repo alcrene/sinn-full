@@ -45,7 +45,7 @@ import theano_shim as shim
 # %%
 @tag.WilsonCowan
 @ObjectiveFunction(tags={'se', 'forward'})
-def WC_se(self, k):
+def WC_se(model, k):
     "Squared error loss"
-    u_predict = self.u_upd(self, k)
-    return -((u_predict - self.u(k))**2).sum()
+    u_predict = model.u_upd(model, k)
+    return -((u_predict - model.u(k))**2).sum()

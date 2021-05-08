@@ -74,8 +74,6 @@ class Trial(BaseTrial):
 
     Attributes
     ----------
-    subject: str
-        A string identifying the subject.
     [data attributes]: Any
         Keys storing relevant metadata for the trial.
     datadir: str
@@ -111,7 +109,6 @@ class Trial(BaseTrial):
     ===========================
 
     - Add the data attributes relevant to your data set.
-      (The 'subject' does not need to be added since `BaseTrial` provides it.)
     - If these attributes are extracted from the filenames, you will need to
       add corresponding regex expressions to do so; `parse_label` should then
       use them.
@@ -271,8 +268,10 @@ class DataAccessor(DataAccessorBase):
        (Class attribute: Type) The type used to store trial info.
 
     metadata_filename
-       (Class attribute: str) Metada files store subject-specific, like channel
-       locations.
+       (Class attribute: str) Metadata files store information files for
+       multiple trials, like device information.
+       Multiple trials may be associated to the same metadata file, but at
+       present there can be only one metadata associated to a trial.
 
     load
        (Method) Adapt to the data storage format. This is where the specific of
@@ -293,9 +292,9 @@ class DataAccessor(DataAccessorBase):
        reconstruct the Accessor, these methods may have to be specialized.
 
     """
-    # Should include a placeholder named 'subject', to be replaced by
-    # the subject's label.
-    metadata_filename = "great_dataset_{subject}_metadata.placeholder"
+    # Should include placeholder(s) (e.g. 'subject') matching fields of
+    # the Trial object.
+    metadata_filename = "great_dataset_{subject}_metadata.ext"
     Trial = Trial
 
     def load(self, trial):

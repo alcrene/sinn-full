@@ -33,6 +33,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, ClassVar, Optional, Set, List, Dict
 from pydantic import validate_arguments
 import mackelab_toolbox.serialize as mtbserialize
+from mackelab_toolbox.typing import json_like
 from smttask.typing import PureFunction, CompositePureFunction
 import operator
 import numpy as np
@@ -730,6 +731,22 @@ class Prior(PyMC_Model):
             assert all(v not in rv_list for v in shim.graph.symbolic_inputs(logpt))
         return logpt
 
+# %% [markdown] tags=["remove-cell"]
+# PATTERN:
+#
+# - `PureFunctionObjective` is a subclass of `PureFunction`.
+#   It serializes the callable by storing its source code.
+#   For this to work well, it should be as lean as possible; in particular,
+#   PureFunction serializaton it doesn't work well if it inherits `BaseModel`.
+#   User-facing code should not see this type.
+# - `ObjectiveFunction` is a subclass of `BaseModel`. It wraps a
+#   `PureFunctionObjective` object (stored as `func`), along with some
+#   metadata. It provides redirects to the underlying function so that it can
+#   be transparently used as a function.
+#
+# NOTE:
+# Now that PureFunction allows registering deserializers for custom subtypes,
+# it may not be necessary to have a separate ObjectiveFunction.
 
 # %% [markdown] tags=["remove-cell"]
 # PROBLEM: Serializing PureFunction includes the decorator(s). However,
@@ -741,6 +758,7 @@ class Prior(PyMC_Model):
 #   tags should be harmless (unless they are dynamically removed).
 #   Keeping the hack for now since it works and I don't care to work out
 #   the magic done by ObjectiveFunction.\_\_new\_\_.
+# UPDATE: We now serialize the tags. Let's see how it goes.
 
 # %% [markdown]
 # (objective-functions)=
@@ -824,17 +842,32 @@ class Prior(PyMC_Model):
 # %% [markdown]
 # ### Definition - ObjectiveFunction
 
+# %% tags=["remove-cell"]
+
+# FIXME: I think the casting to PureFunctionObjective breaks PureFunction's
+#        support for partial functions
+
 # %% tags=["hide-input"]
+
 class PureFunctionObjective(PureFunction):
-    submodel : str=""
+    submodel: str=""
     @classmethod
     def validate(cls, value):  # Without this wrapper, values would be cast to PureFunction
         if isinstance(value, PureFunctionObjective):
             return value
         elif isinstance(value, Callable):
             return PureFunctionObjective(value)
+        elif json_like(value, "PureFunctionObjective"):
+            purefunc_json, submodel = value[1:]
+            purefunc = super().validate(purefunc_json)
+            if isinstance(purefunc, CompositePureFunction):
+                pureobjective = CompositePureFunction(purefunc.func, *purefunc.terms)
+            else:
+                pureobjective = PureFunctionObjective(purefunc.func)
+                pureobjective.submodel = submodel
+            return pureobjective
         else:
-            return super().validate(value)
+            return PureFunctionObjective(super().validate(value).func)
     def __call__(self, model, *args, **kwargs):
         if self.submodel:
             model = getattr(model, self.submodel)
@@ -848,16 +881,21 @@ class CompositePureFunctionObjective(CompositePureFunction, PureFunctionObjectiv
         elif isinstance(value, Callable):
             return CompositePureFunctionObjective(value)
         else:
-            return super().validate(value)
+            return CompositePureFunctionObjective(super().validate(value).func)
 def pure_function_encoder_wrapper(func):
     s = PureFunction.json_encoder(func)
-    if isinstance(s, str):
-        # CompositePureFunction returns tuple; nothing to do in that case
-        s = '\n'.join(line for line in s.split('\n')
-                      if not line.startswith('@ObjectiveFunction'))
-    return s
+    # if isinstance(s, str):
+    #     # CompositePureFunction returns tuple; nothing to do in that case
+    #     s = '\n'.join(line for line in s.split('\n')
+    #                   if not line.startswith('@ObjectiveFunction')
+    #                   and not line.startswith('@tag'))
+    # return s
+    return ("PureFunctionObjective", s, func.submodel)
+
+# Patch our custom types into the (de)serialization machinery
 mtbtyping.add_json_encoder(PureFunctionObjective, pure_function_encoder_wrapper,
                            priority=1)
+PureFunction.subtypes['PureFunctionObjective'] = PureFunctionObjective.validate
 # HACK !!!!!! We reorder the json_encoders while preserving refs to the variable
 import sinnfull
 for k in list(sinnfull.json_encoders.keys()):
@@ -924,6 +962,8 @@ class ObjectiveFunction(BaseModel, abc.ABC, metaclass=ObjectiveFunctionMeta):
     """
     func: PureFunctionObjective
     tags: Set[str]=set()
+    # submodel: str  # Actually stored in `func`, but exported for serialization
+                     # (since `func` itself won't export it)
 
     # Attempting to use a tag listed in `disallowed_tags` will raise an error.
     disallowed_tags: ClassVar[set] = set()
@@ -988,28 +1028,56 @@ class ObjectiveFunction(BaseModel, abc.ABC, metaclass=ObjectiveFunctionMeta):
         else:
             return super().__new__(cls)
 
+    # # Add 'submodel' to exported fields so it can be reattached to
+    # # func on deserialization
+    # def dict(self, **kwargs):
+    #     d = super().dict(**kwargs)
+    #     d['submodel'] = self.submodel
+    #     return d
+
     # Report and set the "submodel" attribute as the one of 'func'
     # ('submodel' must be attached to 'func' in order to not be lost during
     #  function arithmetic)
+    # NOTE: This doesn't work when func is a CompositePureFunction
+    #       So it may not be necessary after all
+    @property
+    def submodel(self):
+        return self.func.submodel
+    @property
+    def __func_src__(self):
+        return self.func.__func_src__
+    # NB: We use __setattr__ instead of @__func_src__.setter so that it
+    #     catches the call before BaseModel.__setattr__
+
     def __setattr__(self, attr, value):
-        if attr == "submodel":
+        if attr == "__func_src__":
+            self.func.__func_src__ = value
+        elif attr == "submodel":
             self.func.submodel = value
         else:
             super().__setattr__(attr, value)
     # Allow tag filters to be overspecified
-    def __getattr__(self, attr):
-        if attr == "submodel":
-            return self.func.submodel
-        if hasattr(BaseModel, '__getattr__'):
-            try:
-                return super().__getattr__(attr)
-            except AttributeError:
-                pass
-        if attr in self.tags:
-            return self
-        else:
-            raise AttributeError(
-                f"'{attr}' was not found in {type(self).__name__}.")
+    # Use __getattribute__ to avoid hiding errors (c.f. https://stackoverflow.com/a/62648148)
+    def __getattribute__(self, attr):
+        try:
+            return super().__getattribute__(attr)
+        except AttributeError as e:
+            if attr in self.tags:
+                return self
+            else:
+                raise e
+
+    # def __getattr__(self, attr):
+    #     if hasattr(BaseModel, '__getattr__'):
+    #         try:
+    #             return super().__getattr__(attr)
+    #         except AttributeError:
+    #             pass
+    #     if attr in self.tags:
+    #         return self
+    #     else:
+    #         raise AttributeError(
+    #             f"'{attr}' was not found in {type(self).__name__}.")
 
     ## Validation ##
     ## It would be convenient to be able to validate serialized strings as well,

@@ -54,20 +54,20 @@ import theano_shim as shim
 @tag.OU_AR
 @tag.OU_FiniteNoise
 @ObjectiveFunction(tags={'nodyn', 'se'})
-def OU_obs_se(self, k):
+def OU_obs_se(model, k):
     "Squared error loss"
-    Itilde=self.Itilde; I=self.I
-    Wtilde=self.Wtilde; A=self.A
+    Itilde=model.Itilde; I=model.I
+    Wtilde=model.Wtilde; A=model.A
     sqrerr = ((shim.dot(A*Wtilde, Itilde(k)) - I(k))**2).sum()
     return -sqrerr
 
 @tag.OU_AR
 @tag.OU_FiniteNoise
 @ObjectiveFunction(tags={'nodyn', 'l1'})
-def OU_obs_l1(self, k):
+def OU_obs_l1(model, k):
     "L1 (absolute difference) loss"
-    Itilde=self.Itilde; I=self.I
-    Wtilde=self.Wtilde; A=self.A
+    Itilde=model.Itilde; I=model.I
+    Wtilde=model.Wtilde; A=model.A
     l1err = abs(shim.dot(A*Wtilde, Itilde(k)) - I(k)).sum()
     return -l1err
 
@@ -78,11 +78,11 @@ def OU_obs_l1(self, k):
 # %%
 @tag.OU_AR
 @ObjectiveFunction(tags={'forward'})
-def OUAR_logp_forward(self, k):
-    Δt = self.dt
+def OUAR_logp_forward(model, k):
+    Δt = model.dt
     Δt = getattr(Δt, 'magnitude', Δt)
-    μtilde=self.μtilde; σtilde=self.σtilde; τtilde=self.τtilde
-    Itilde=self.Itilde; I=self.I
+    μtilde=model.μtilde; σtilde=model.σtilde; τtilde=model.τtilde
+    Itilde=model.Itilde; I=model.I
     norm_Ik = shim.log(σtilde*shim.sqrt(2*Δt)).sum()
     gauss_Ik = ((Itilde(k) - Itilde(k-1) + (Itilde(k-1)-μtilde)*Δt/τtilde)**2 / (4*σtilde**2*Δt)).sum()
     return - norm_Ik - gauss_Ik
@@ -102,11 +102,11 @@ def OUAR_logp_forward(self, k):
 # %%
 @tag.OU_AR
 @ObjectiveFunction(tags={'backward'})
-def OUAR_logp_backward(self, k):
-    Δt = self.dt
+def OUAR_logp_backward(model, k):
+    Δt = model.dt
     Δt = getattr(Δt, 'magnitude', Δt)
-    μtilde=self.μtilde; σtilde=self.σtilde; τtilde=self.τtilde
-    Itilde=self.Itilde; I=self.I
+    μtilde=model.μtilde; σtilde=model.σtilde; τtilde=model.τtilde
+    Itilde=model.Itilde; I=model.I
     norm_Ik = shim.log(σtilde*shim.sqrt(2*Δt)).sum()
     gauss_Ik = ((Itilde(k) - Itilde(k+1) - (Itilde(k+1)-μtilde)*Δt/τtilde)**2 / (4*σtilde**2*Δt)).sum()
     return - norm_Ik - gauss_Ik
@@ -129,11 +129,11 @@ OUAR_logp_smoother = (OUAR_logp_forward + OUAR_logp_backward) / 2
 # %%
 @tag.OU_FiniteNoise
 @ObjectiveFunction(tags={'forward'})
-def OUFN_logp_forward(self, k):
-    Δt = self.dt
+def OUFN_logp_forward(model, k):
+    Δt = model.dt
     Δt = getattr(Δt, 'magnitude', Δt)
-    μtilde=self.μtilde; σtilde=self.σtilde; τtilde=self.τtilde
-    Itilde=self.Itilde; I=self.I
+    μtilde=model.μtilde; σtilde=model.σtilde; τtilde=model.τtilde
+    Itilde=model.Itilde; I=model.I
     norm_Ik = shim.log(σtilde*shim.sqrt(2*Δt/τtilde)).sum()
     gauss_Ik = ((Itilde(k) - Itilde(k-1) + (Itilde(k-1)-μtilde)*Δt/τtilde)**2 / (4*σtilde**2*Δt)).sum()
     return - norm_Ik - gauss_Ik
@@ -145,11 +145,11 @@ def OUFN_logp_forward(self, k):
 # %%
 @tag.OU_FiniteNoise
 @ObjectiveFunction(tags={'backward', 'se'})
-def OUFN_logp_backward(self, k):
-    Δt = self.dt
+def OUFN_logp_backward(model, k):
+    Δt = model.dt
     Δt = getattr(Δt, 'magnitude', Δt)
-    μtilde=self.μtilde; σtilde=self.σtilde; τtilde=self.τtilde
-    Itilde=self.Itilde; I=self.I
+    μtilde=model.μtilde; σtilde=model.σtilde; τtilde=model.τtilde
+    Itilde=model.Itilde; I=model.I
     norm_Ik = shim.log(σtilde*shim.sqrt(2*Δt/τtilde)).sum()
     gauss_Ik = ((Itilde(k) - Itilde(k+1) - (Itilde(k+1)-μtilde)*Δt/τtilde)**2 / (4*σtilde**2*Δt)).sum()
     return - norm_Ik - gauss_Ik

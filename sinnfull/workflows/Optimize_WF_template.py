@@ -261,7 +261,8 @@ def get_prior(model_class: Type[Model], prior_spec: dict):
     with Prior() as prior:
         # TODO: Expose a public attribute on the model class
         #      (.nested_models is only defined on instances)
-        for submodel_nm in model_class._model_identifiers:
+        # NB: Serialization depends on the order in which priors are defined
+        for submodel_nm in sorted(model_class._model_identifiers):
             subprior = prior_spec[submodel_nm]
             priors[subprior.selector](**subprior.kwds, name=submodel_nm)
     return prior

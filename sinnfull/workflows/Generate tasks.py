@@ -99,7 +99,7 @@ params = [
          nsteps=nsteps,
          default_learning_params = default_learning_params,
          fit_hyperθ_updates={'params': {'λθ':λθ, 'clip': θ_clip, 'b1': 1., 'b2': 1.}},
-         θ_init_key = θ_init_key,
+         Θ_init_key = Θ_init_key,
          optimizer_rngkey= 2,    # Affects drawn batch samples during iterations
          sampler_rngkey  = 5,    # Affects the data segment drawn for each iteration
          # Data
@@ -114,7 +114,7 @@ params = [
          prior_spec          = prior_spec,
          model_rngkey        = 1,   # Affects initial integration during the fit
         )
-    for θ_init_key in [(6,i) for i in range(n_fits)] + ['ground truth']
+    for Θ_init_key in [(6,i) for i in range(n_fits)] + ['ground truth']
     for λθ in θ_learning_rates
     for nsteps in [5000]
 ]
@@ -148,7 +148,7 @@ params = [
          nsteps=nsteps,
          fit_hyperθ_updates={'params': {'λθ':λθ, 'clip': θ_clip, 'b1': 1., 'b2': 1.},
                              'latents':{'λη':λη, 'clip': η_clip}},
-         θ_init_key = θ_init_key,
+         Θ_init_key = Θ_init_key,
          model = model_name,
          observed_hists    =["N"],
          latent_hists      =["e"],
