@@ -170,7 +170,7 @@ data = rec_data.data
 
 # %%
 from collections import namedtuple
-from sinnfull.viewing.record_store_viewer import FitCollection
+from sinnfull.viz.record_store_viewer import FitCollection
 
 # %%
 rsview = sinnfull.diagnostics.utils.rsview

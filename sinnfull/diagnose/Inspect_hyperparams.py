@@ -54,7 +54,7 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
 import seaborn as sns
 
-from sinnfull.viewing import plot_fit_dynamics  # Sets sns defaults
+from sinnfull.viz import plot_fit_dynamics  # Sets sns defaults
 
 # %%
 import sinnfull.diagnostics

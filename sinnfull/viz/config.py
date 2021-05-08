@@ -30,7 +30,7 @@ import matplotlib as mpl
 import seaborn as sns
 import holoviews as hv
 from mackelab_toolbox.utils import Singleton
-from sinnfull.viewing.utils import interpolate_color
+from sinnfull.viz.utils import interpolate_color
 
 def default_factory(attr, f):
     def singleton_factory():

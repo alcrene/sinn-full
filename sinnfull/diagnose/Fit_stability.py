@@ -28,7 +28,7 @@
 # :   For example, any learning rate too high for fitting parameters alone, is almost certainly too high for fitting them alongside latents.
 
 # %% [markdown]
-# **FIXME**: Much of the plotting can be replaced by calls to functions in _sinnfull.viewing_. Follow pattern used in [sinnfull.view.result_viewer.ipynb](sinnfull.view.result_viewer.ipynb).
+# **FIXME**: Much of the plotting can be replaced by calls to functions in _sinnfull.viz_. Follow pattern used in [sinnfull.view.result_viewer.ipynb](sinnfull.view.result_viewer.ipynb).
 
 # %%
 import sinnfull
@@ -60,9 +60,9 @@ logger = logging.getLogger('diagnose.fit_stability')
 # %%
 # Plotting
 import matplotlib.pyplot as plt
-from sinnfull.viewing.fit import plot_latent_evolution, plot_fit_dynamics, plot_fit_targets
-from sinnfull.viewing.stream import plot_stream, add_titles, add_watermark
-from sinnfull.viewing.config import pretty_names
+from sinnfull.viz.fit import plot_latent_evolution, plot_fit_dynamics, plot_fit_targets
+from sinnfull.viz.stream import plot_stream, add_titles, add_watermark
+from sinnfull.viz.config import pretty_names
 
 # %%
 from sinnfull.models import OUInput
@@ -133,7 +133,7 @@ for ax in axes['τtilde']:
 plot_fit_targets(axes, ground_truth);
 
 # %%
-from sinnfull.viewing.record_store_viewer import RSView
+from sinnfull.viz.record_store_viewer import RSView
 
 # %%
 #records = reclist.filter.on(20201028).list

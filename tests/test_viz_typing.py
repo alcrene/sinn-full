@@ -1,4 +1,4 @@
-from sinnfull.viewing import StrTuple
+from sinnfull.viz import StrTuple
 
 def test_strtuple():
     assert StrTuple((5,4)) == StrTuple(5,4) == StrTuple("(5,4)") == StrTuple("(5, 4)")

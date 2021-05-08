@@ -47,7 +47,7 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     from matplotlib.colors import ListedColormap
     import seaborn as sns
-    import sinnfull.viewing  # Load plotting defaults
+    import sinnfull.viz  # Load plotting defaults
     bokeh.io.output_notebook()
 
 

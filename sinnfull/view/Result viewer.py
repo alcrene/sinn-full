@@ -28,7 +28,7 @@ import logging
 from IPython.display import display
 import holoviews as hv
 from holoviews.core.io import Unpickler
-from sinnfull.viewing import RSView, BokehOpts, ColorEvolCurvesByMaxL
+from sinnfull.viz import RSView, BokehOpts, ColorEvolCurvesByMaxL
 from sinnfull.utils import get_field_values
 
 # %% tags=["remove-cell"] jupyter={"source_hidden": true}
@@ -171,7 +171,7 @@ logLcurves.select(init_key='ground truth') \
 # ::::
 
 # %% tags=["remove-input"]
-from sinnfull.viewing.utils import get_logL_quantile, convert_dynmap_layout_to_holomap_layout
+from sinnfull.viz.utils import get_logL_quantile, convert_dynmap_layout_to_holomap_layout
 
 # %% tags=["remove-cell"]
 #default_split = ('Ĩ',)  # Match with `rsview.SplitKey.kdims`
@@ -213,7 +213,7 @@ best_fit = fits[max(fits)]
 
 # %% [markdown] tags=["remove-cell"]
 # from smttask import Task
-# from sinnfull.viewing.record_store_viewer import FitData, StrTuple
+# from sinnfull.viz.record_store_viewer import FitData, StrTuple
 # FitKey = FitData.FitKey
 
 # %% [markdown] tags=["remove-cell"]

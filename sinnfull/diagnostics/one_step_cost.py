@@ -45,7 +45,7 @@ from mackelab_toolbox import iotools
 from sinn.histories import TimeAxis
 import sinnfull.models
 import sinnfull.rng
-from sinnfull.viewing import pretty_names
+from sinnfull.viz import pretty_names
 from sinnfull.utils import add_to, add_property_to
 
 # %%

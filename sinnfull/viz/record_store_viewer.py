@@ -82,10 +82,10 @@ from mackelab_toolbox.utils import Singleton
 import sinnfull
 from sinnfull.parameters import ParameterSet
 from sinnfull.utils import add_to, add_property_to
-from sinnfull.viewing.config import pretty_names, BokehOpts
-from sinnfull.viewing.typing_ import StrTuple, KeyDimensions, ParamDimensions
-from sinnfull.viewing.utils import get_logL_quantile
-from sinnfull.viewing.hooks import hide_table_index
+from sinnfull.viz.config import pretty_names, BokehOpts
+from sinnfull.viz.typing_ import StrTuple, KeyDimensions, ParamDimensions
+from sinnfull.viz.utils import get_logL_quantile
+from sinnfull.viz.hooks import hide_table_index
 
 # %% tags=["remove-cell"]
 from mackelab_toolbox.utils import TimeThis

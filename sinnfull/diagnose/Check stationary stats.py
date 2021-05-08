@@ -36,7 +36,7 @@ sinnfull.setup('theano', view_only=True)
 # %%
 import logging
 import holoviews as hv
-from sinnfull.viewing import BokehOpts
+from sinnfull.viz import BokehOpts
 from sinnfull.models import models, TimeAxis
 
 # %%
@@ -73,8 +73,8 @@ model.params.M, model.params.Mtilde
 # %% [markdown]
 # Alternatively, one can also retrieve a model from a particular fit. This might given a different than giving the model directly if there is a bug in the construction of the fit task.
 # ```python
-# from sinnfull.viewing import RSView
-# from sinnfull.viewing.record_store_viewer import FitData
+# from sinnfull.viz import RSView
+# from sinnfull.viz.record_store_viewer import FitData
 # rsview = RSView()
 # record = rsview.get("20210325-033910_1727a0")
 # fit = FitData(record=record)

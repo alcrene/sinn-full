@@ -10,7 +10,7 @@ import sinn.utils
 from sinn.utils.pydantic import initializer
 import smttask
 import sinnfull
-from sinnfull.viewing import RSView, FitData
+from sinnfull.viz import RSView, FitData
 import sinnfull.diagnostics
 
 rsview = RSView()
@@ -165,8 +165,8 @@ def set_to_zero():
 
 # TODO: Relevant functionality should be moved to GradInspector
 
-from sinnfull.viewing.config import pretty_names
-from sinnfull.viewing.typing_ import StrTuple
+from sinnfull.viz.config import pretty_names
+from sinnfull.viz.typing_ import StrTuple
 import holoviews as hv
 
 def param_val_tables(Θ: dict) -> hv.Layout:
