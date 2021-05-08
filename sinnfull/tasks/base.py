@@ -493,12 +493,14 @@ def OptimizeModel(
     import smttask
     from smttask.multiprocessing import get_worker_index
 
-
-    # Compile the optimizer
-    if not optimizer.compiled:
-        logger.info("Compiling optimization functions...")
-        optimizer.compile_optimization_functions()
-        logger.info("Done compiling.")
+    # Convert Recorder tuple to Recorder dict
+    # (Remark: if we had task validators, this could nicely be done there)
+    if isinstance(recorders, tuple):
+        _recorders = {rec.name: rec for rec in recorders}
+        if len(_recorders) != len(recorders):
+            raise ValueError("Provided recorders have duplicate names:\n"
+                             f"{[rec.name for rec in recorders]}")
+        recorders = _recorders
 
     # Abort fit if optimizer has already terminated
     # This can happen if we restart from a previous fit.
@@ -510,20 +512,17 @@ def OptimizeModel(
         outcome = None
     if outcome:
         return {'nsteps':optimizer.stepi, 'optimizer':optimizer,
-                'recorders': recorders, 'outcome': outcome}
+                'recorders': list(recorders.values()), 'outcome': outcome}
+
+    # Compile the optimizer
+    if not optimizer.compiled:
+        logger.info("Compiling optimization functions...")
+        optimizer.compile_optimization_functions()
+        logger.info("Done compiling.")
 
     # # Attach recorders to optimizer
     # for r in recorders:
     #     optimizer.add_recorder(r)
-
-    # Convert Recorder tuple to Recorder dict
-    # (Remark: if we had task validators, this could nicely be done there)
-    if isinstance(recorders, tuple):
-        _recorders = {rec.name: rec for rec in recorders}
-        if len(_recorders) != len(recorders):
-            raise ValueError("Provided recorders have duplicate names:\n"
-                             f"{[rec.name for rec in recorders]}")
-        recorders = _recorders
 
     # Record the initial state
     if optimizer.stepi == 0:
@@ -556,7 +555,7 @@ def OptimizeModel(
             logger.info(outcome)
             optimizer.record()
             return {'nsteps': optimizer.stepi, 'optimizer': optimizer,
-                    'recorders': recorders, 'outcome': outcome}
+                    'recorders': list(recorders.values()), 'outcome': outcome}
         elif optimizer.status is OptimizerStatus.Failed:
             break
 
@@ -568,4 +567,4 @@ def OptimizeModel(
     #     optimizer.remove_recorder(r)
     # Return the results in the order prescribed by OptimizeOutputs
     return {'nsteps':optimizer.stepi, 'optimizer':optimizer,
-            'recorders': recorders, 'outcome': outcome}
+            'recorders': list(recorders.values()), 'outcome': outcome}
