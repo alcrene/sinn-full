@@ -695,11 +695,11 @@ diverging_cost = DivergingCost(cost_recorder='log L', maximize=True)
 # %%
 #for optimizer, nsteps in zip(optimizers, nsteps_list):
 if reason is None:
-    reason = "Hyperparameter exploration\n"
+    reason = ""
+else:
+    reason += "\n\n"
 reason += \
 f"""
-- OU + Linear projection
-- Synthetic data
 - Init params: {Θ_init_key}
 - {nsteps} passes
 """.rstrip()

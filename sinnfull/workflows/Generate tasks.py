@@ -50,12 +50,14 @@ from sinnfull.models import paramsets, objectives, priors
 from sinnfull.optim import paramsets as optim_paramsets
 
 # %%
-# Create the directory to which we will save tasks
+# The directory to which we will save task files
+task_save_location = "tasklist"
+
 if not os.path.exists("tasklist"):
     os.mkdir("tasklist")
 
 # %% [markdown]
-# ## Fully observed model
+# ## Fully observed Wilson-Cowan model
 # The example below fits a Wilson-Cowan $α^{-1} \frac{d}{dt}{u}_t = L[{u}_t] + {w} F_{β,h}[{u}_t] + I_t$, where the sequence $I_t$ (a white noise process) is _known_. The unknown model parameters are $α$, $β$, $h$ and $w$.
 #
 # For more details, see [the model's notebook](../models/WC/WC).
@@ -64,9 +66,6 @@ if not os.path.exists("tasklist"):
 n_fits         = 1  # Number of different initial conditions to draw
 θ_learning_rates = [0.0002]
 θ_clip         = 100.
-task_save_location = "tasklist"
-# # mkdir tasklist
-#params = []
 
 # %%
 model_selector = {"__root__": {"ObservedDynamics"},
@@ -120,14 +119,16 @@ params = [
 ]
 
 # %% [markdown]
-# ## Model with white noise latent
+# ## Wilson-Cowan model with white noise latent (unknown) input
 #
-# This is the form of the Ricker map studied by Wood (2010), where $e$ is unobserved white noise. The sequence of values $e_{0:T}$ is inferred along with the parameters $r$, $\varphi$ and $σ$.
+# Same model as [above](#fully-observed-wilson-cowan8model), with the difference that the sequence $I_{0:T}$ (a white noise process) is now _unknown_. It must thus be inferred, in the form of a long vector on length $T$, along with the model parameters $α$, $β$, $h$ and $w$.
 #
 # The differences with the fully observed case:
 #
 # - We add fit hyperparameters for the latent variables (prefixed with `η`).
-# - `"e"` is now listed as a _latent_ history.
+# - `"dynamics.I"` is now listed as a _latent_ history.[^1]
+#
+# [^1] We could use `"inputs.ξ"` instead of `"dynamics.I"`; the two point to the same history.
 
 # %%
 model_name     = "Ricker"

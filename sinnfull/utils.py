@@ -453,15 +453,14 @@ from pathlib import Path
 # %%
 json_encoder_fn = None
 def get_json_encoder_fn():
-    import json
     from pydantic import BaseModel
-    from sinnfull import json_encoders
+    from sinnfull import json_encoders as sinnfull_json_encoders
     global json_encoder_fn
 
     if not json_encoder_fn:
         class DummyModel(BaseModel):
             class Config:
-                json_encoders = json_encoders
+                json_encoders = sinnfull_json_encoders
         json_encoder_fn = DummyModel.__json_encoder__
         # json_encoders = {
         #     ObjectiveFunction: lambda objective_function: objective_function.json(),
@@ -558,8 +557,11 @@ def generate_task_from_nb(
 
 
     """
+    import json
+    from pydantic import BaseModel
     import papermill  # Import here to avoid required always requiring papermill dependency
     import smttask    # Keep anything not "builtin" from the global module imports
+    from sinnfull import json_encoders
 
     parameters['exec_environment'] = exec_environment
     task_save_location = parameters.get('task_save_location', default_task_save_location)
@@ -644,6 +646,10 @@ def papermill_parameter_block(parameters: ParameterSet):
     -------
     None  (value is printed)
     """
+    import json
+    from pydantic import BaseModel
+    from sinnfull import json_encoders
+
     ps_str = {}
     # Sanitize parameters
     for k, v in parameters.items():
