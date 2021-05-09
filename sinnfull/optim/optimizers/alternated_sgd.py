@@ -166,7 +166,7 @@ if __name__ == "__main__":
 # %%
 class AlternatedSGD(Optimizer):
     __slots__ = ('_compile_context', '_k_vars',
-                 'update_θ', 'update_η',
+                 'logp', 'update_θ', 'update_η',
                  '_latent_cache', '_latent_cache_path', '_current_segment_key',
                  'compiled',
                  'diagnostics_recorders'  # Don't include in Pydantic model
@@ -199,7 +199,6 @@ class AlternatedSGD(Optimizer):
         arbitrary_types_allowed=True  # TODO: Remove
         allow_population_by_field_name=True  # When Θ gets exported, accept it as parameter
         fields={'Θ': {'alias': 'init_params'},
-                'logp_default': {'alias': 'logp'},
                 'logp_default_nodyn': {'alias': 'logp_nodyn'}}
         json_encoders = sinnfull.json_encoders
 
@@ -407,6 +406,8 @@ class AlternatedSGD(Optimizer):
             self.logp_latents_nodyn = self.logp_latents_nodyn.__func__
 
         d = super().dict(*args, **kwargs)
+
+        d.pop('logp', None)
 
         self.logp_params = store.logp_params
         self.logp_latents = store.logp_latents
