@@ -543,8 +543,8 @@ def OptimizeModel(
         optimizer.step(**step_kwargs)  # `step()` includes a call to `record()`
         # Record current state
         for recorder in recorders.values():
-            if recorder.ready(i):
-                recorder.record(i, optimizer)
+            if recorder.ready(optimizer.stepi):  # NB: optimizer.stepi = i+1 at this point
+                recorder.record(optimizer.stepi, optimizer)
         # Check if we reached an early stopping condition
         for convergence_test in convergence_tests:
             optimizer.status |= convergence_test(recorders, optimizer)
