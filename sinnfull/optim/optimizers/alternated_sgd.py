@@ -1130,6 +1130,7 @@ class AlternatedSGD(Optimizer):
             raise AssertionError("There are pending symbolic updates.")
         Kθb_symb = self.Kθb_symb
         Kθr_symb = self.Kθr_symb
+        K  = self.model.cur_tidx - self.model.t0idx + 1
 
         #### Lock latent histories ####
         for h in self.latent_hists.values():
@@ -1147,6 +1148,7 @@ class AlternatedSGD(Optimizer):
                  f"Histories with RNG inputs: {[h.name for h in self.model.rng_hists]}."
             )
 
+        Θ = {optimθ for modelθ, optimθ in self.Θ}  # Used for sanity checks
         #### Evaluate logp(θ) ####
         batch_logp, state_upds = self.logp_params(self.model.curtidx_var,
                                                   Kθb_symb)
@@ -1155,8 +1157,19 @@ class AlternatedSGD(Optimizer):
         state_upds = self.prior_params.sub_optim_vars(state_upds, self.Θ)
             # Keys to state_upds are histories, so only values may need to be transformed
         # Add prior. The factor λ scales the prior proportionally to the size of a batch
-        λ = self._k_vars.Kθb_symb / len(self.model.time)
-        batch_logp += λ * self.prior_params.sub_optim_vars(self.prior_params.logpt, self.Θ)
+        λ = self._k_vars.Kθb_symb / K
+        prior_logp = self.prior_params.sub_optim_vars(self.prior_params.logpt, self.Θ)
+        msg = ("The {} does not depend on all of the optimization parameters. "
+               "This is almost certainly an error.\nMissing: {}")
+        batch_inputs = set(shim.graph.symbolic_inputs(batch_logp))
+        prior_inputs = set(shim.graph.symbolic_inputs(prior_logp))
+        if not Θ <= batch_inputs:
+            warn(msg.format("model's cost function", Θ - batch_inputs))
+        if not Θ <= prior_inputs:
+            warn(msg.format("model's prior", Θ - prior_inputs))
+        # batch_logp = shim.print(batch_logp, "θ batch logp")   # DEBUG
+        # prior_logp = shim.print(prior_logp, "θ prior logp")   # DEBUG
+        batch_logp = batch_logp + λ*prior_logp
         #if self.logp_params_regularizer is not None:
         #    batch_logp += self.logp_params_regularizer(self.model)
         if state_upds != shim.get_updates():
@@ -1198,8 +1211,11 @@ class AlternatedSGD(Optimizer):
             outputs=batch_logp
         )
         k0 = self.model.t0idx
-        K  = self.model.cur_tidx - self.model.t0idx
         def logp(k0=k0, K=K):
+            """
+            Return the average logp per time point (i.e. logp(k0:k0+K)/K).
+            Taking the average makes logp comparable across batch sizes.
+            """
             # Typically the forward accumulator is offset by 1; shift k0 accordingly
             if not hasattr(self.logp_params, 'start_offset'):
                 raise AttributeError(
@@ -1207,7 +1223,7 @@ class AlternatedSGD(Optimizer):
                     "to have been created with the `sinn.models.Model.accumulate` "
                     "decorator.")
             k0 -= self.logp_params.start_offset
-            return logp_f(k0, K)
+            return logp_f(k0, K) / K
         object.__setattr__(self, 'logp', logp)
 
         #### Compile θ update function ####
