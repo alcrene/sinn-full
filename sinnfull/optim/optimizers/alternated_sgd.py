@@ -1197,7 +1197,9 @@ class AlternatedSGD(Optimizer):
             inputs =(self.model.curtidx_var, Kθb_symb),
             outputs=batch_logp
         )
-        def logp(k0=self.model.time.t0idx,K=len(self.model.time)):
+        k0 = self.model.t0idx
+        K  = self.model.cur_tidx - self.model.t0idx
+        def logp(k0=k0, K=K):
             # Typically the forward accumulator is offset by 1; shift k0 accordingly
             if not hasattr(self.logp_params, 'start_offset'):
                 raise AttributeError(

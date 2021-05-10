@@ -81,7 +81,7 @@ from smttask.utils import get_task_param
 from mackelab_toolbox.utils import Singleton
 import sinnfull
 from sinnfull.parameters import ParameterSet
-from sinnfull.utils import add_to, add_property_to
+from sinnfull.utils import add_to, add_property_to, model_name_from_selector
 from sinnfull.viz.config import pretty_names, BokehOpts
 from sinnfull.viz.typing_ import StrTuple, KeyDimensions, ParamDimensions
 from sinnfull.viz.utils import get_logL_quantile
@@ -101,7 +101,7 @@ from pydantic import BaseModel, PrivateAttr
 from smttask.view import RecordView
 from sinn import Model
 from sinn.utils.pydantic import initializer
-from sinnfull.models import Prior
+from sinnfull.models import Prior, ModelSpec, get_model_class
 from sinnfull.data import DataAccessor
 from sinnfull.optim import Recorder
 from sinnfull.optim.recorders import ΘRecorder
@@ -714,6 +714,7 @@ class FitData(BaseModel):
         key_dims.get('init_key', label='init key')]  # FIXME: Make immutable
     #Instance attrs
     record       : RecordView
+    model_spec   : ModelSpec=None
     model_name   : str=None
     Λlabel       : str="Λ?"
     Λ            : dict={}
@@ -732,15 +733,30 @@ class FitData(BaseModel):
     class Config:
         arbitrary_types_allowed=True
 
-    @initializer('model_name')
-    def get_model_name(cls, value, record):
+    @initializer('model_spec')
+    def get_model_spec(cls, value, record):
         model = get_task_param(record, 'optimizer.model')
         if isinstance(model, Model):
             # Deserialized model
-            return model.name
+            raise NotImplementedError
         else:
             # Serialized model
-            return get_task_param(model, 'model_class')
+            return get_task_param(model, 'model_selector')
+
+    @initializer('model_name')
+    def get_model_name(cls, value, model_spec):
+        return model_name_from_selector(model_spec)
+    # @initializer('model_name')
+    # def get_model_name(cls, value, record, model_spec):
+    #     model = get_task_param(record, 'optimizer.model')
+    #     if isinstance(model, Model):
+    #         # Deserialized model
+    #         return model.name
+    #     else:
+    #         # Serialized model
+    #         model_sel = get_task_param(model, 'model_selector')
+    #         return model_name_from_selector(model_sel)
+    #
     @initializer('logL_evol')
     def get_logL_evol(cls, value, record):
         output = record.get_output('log L')
@@ -852,7 +868,8 @@ class FitData(BaseModel):
     ## Model and data ##
     @property
     def model_class(self) -> Type[Model]:
-        return mtb.iotools._load_types[self.model_name]
+        return get_model_class(self.model_spec)
+        # return mtb.iotools._load_types[self.model_name]
 
     @property
     def model(self) -> Model:
@@ -975,7 +992,9 @@ class FitData(BaseModel):
             else:  # Any other Task, in particular those loading experimental data
                 ground_truth = {}
             if ground_truth:
-                ground_truth = self.model_class.remove_degeneracies(ground_truth)
+                normalize = getattr(self.model_class, 'remove_degeneracies', None)
+                if normalize:
+                    ground_truth = normalize(ground_truth)
                 #ground_truth = synth_data.prior.forward_transform_params(ground_truth)
                 # Convert to a flattened dict with same keys as θ_curves
                 Θidcs = self.Θidcs

@@ -24,6 +24,7 @@
       sections:
       - file: sinnfull/models/GWN/gwn-priors
     - file: sinnfull/models/composite_models/composite_models.py
+    - file: sinnfull/models/tagcolls
 
   - file: sinnfull/optim/index
     sections:

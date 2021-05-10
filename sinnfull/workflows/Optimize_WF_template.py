@@ -208,74 +208,13 @@ if __name__ != "__main__":
                 g[k] = v
 
 # %%
-# TODO: -> Move to utils
-from typing import List
-from sinnfull.models import objectives, ObjectiveFunction
-def get_objectives(objective_selectors) -> List[ObjectiveFunction]:
-    """
-    This function looks complicated, but it's just a series of `if` statements
-    for the different formats objective selectors can take.
-    """
-    objective_list = []
-    if not isinstance(objective_selectors, list):
-        objective_selectors = [objective_selectors]
-    for sel in objective_selectors:
-        if isinstance(sel, dict):
-            # Selector for submodel
-            for submodel, subsel in sel.items():
-                if isinstance(subsel, (list, dict)):
-                    # List of selectors for submodel => recurse and prepend `submodel`
-                    for objective in get_objectives(subsel):
-                        if objective.submodel:
-                            submodel += "."
-                        objective.submodel = submodel + objective.submodel
-                            # Assumes that ObjectiveFunction.submodel defaults to ""
-                        objective_list.append(objective)
-                else:
-                    objective = objectives[subsel].copy(deep=True)
-                    if objective.submodel:
-                        submodel += "."
-                    objective.submodel = submodel + objective.submodel
-                    objective_list.append(objective)
-        else:
-            objective_list.add(objectives[sel].copy(deep=True))
-                # Copy required to avoid modifying the instance in objectives[…]
-                # (deep=True required to also copy objective.func)
-    return objective_list
-
-
-# %%
-from typing import Type
-import pymc3 as pm
-from sinnfull.parameters import ParameterSet
-from sinnfull.models import priors, Model, Prior
-def get_prior(model_class: Type[Model], prior_spec: dict):
-    """
-    model_class: The model class for which to build the prior.
-    prior_selector:
-        dict: priors for submodels.
-              Must have an entry 'selector'.
-              May have an entry 'kwds'.
-    """
-    prior_spec = ParameterSet(prior_spec)
-    with Prior() as prior:
-        # TODO: Expose a public attribute on the model class
-        #      (.nested_models is only defined on instances)
-        # NB: Serialization depends on the order in which priors are defined
-        for submodel_nm in sorted(model_class._model_identifiers):
-            subprior = prior_spec[submodel_nm]
-            priors[subprior.selector](**subprior.kwds, name=submodel_nm)
-    return prior
-
+from sinnfull.models import get_objectives, get_prior, get_model_class
 
 # %% [markdown]
 # Retrieve the model.
 
 # %%
-if isinstance(model_selector, (set,str)):
-    ModelClass = models[model_selector]
-else:
-    ModelClass = models[model_selector['__root__']]
+ModelClass = get_model_class(model_selector)
 
 # %% [markdown]
 # Retrieve all the objectives and sum them.

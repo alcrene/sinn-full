@@ -30,7 +30,8 @@ from __future__ import annotations
 import functools
 import itertools
 from collections.abc import Callable
-from typing import TYPE_CHECKING, ClassVar, Optional, Set, List, Dict
+from typing import TYPE_CHECKING, ClassVar, Union, Optional, \
+    Set, List, Tuple, Dict
 from pydantic import validate_arguments
 import mackelab_toolbox.serialize as mtbserialize
 from mackelab_toolbox.typing import json_like
@@ -85,6 +86,7 @@ class ParamMeta:
             assert shim.config.library == 'theano'
             return Union[Shared[key], PyMC_RV]
 Param=ParamMeta()
+
 
 # %% [markdown]
 # ## Models
@@ -1289,8 +1291,6 @@ Regularizer.update_forward_refs()
 
 # %% [markdown]
 # ## Tagging
-
-# %%
 
 # `tag` is used to store tags in a '_tags' attribute
 # It can be used as either a function or decorator

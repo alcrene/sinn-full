@@ -174,8 +174,9 @@ class TaggedCollection(list):
           * Index (key is int or slice)
             -> return an element (int) or list (slice)
         """
-        # Allow passing multiple tags as comma separated list
-        if isinstance(key, tuple):
+        if isinstance(key, (list,tuple)):
+            # tuple: Allow passing multiple tags as comma separated list
+            # list: JSON serialization is most reliable if list = tuple = set
             key = set(key)
         if isinstance(key, str):
             if key in self.tags:

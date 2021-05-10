@@ -59,7 +59,7 @@ from sinnfull.sampling import SegmentSampler, FixedSegmentSampler
 from sinnfull.data import DataAccessor
 from sinnfull.data.synthetic import SyntheticDataAccessor
 from sinnfull.rng import get_seedsequence, get_np_rng, get_shim_rng, draw_model_sample
-from sinnfull.models import AccumulatedObjectiveFunction, Prior, models
+from sinnfull.models import AccumulatedObjectiveFunction, Prior, models, ModelSpec
 from sinnfull.optim import OptimParams, Optimizer
 
 # %% tags=["remove-cell"]
@@ -197,9 +197,7 @@ def CreateFixedSegmentSampler(*,
 @NonMemoizedTask(json_encoders=sinnfull.json_encoders)
 def CreateModel(
     time              : TimeAxis,
-    model_selector    : Union[Dict[StrictStr,Union[Dict[StrictStr,Tuple[StrictStr,...]],
-                                                   Tuple[StrictStr,...]]],
-                              Tuple[StrictStr,...]],
+    model_selector    : ModelSpec,
     params            : Optional[IndexableNamespace] = None,
     rng_key           : Optional[Union[Tuple[int,...], int]] = None,
     #submodel_selectors: Optional[Dict[str,Set[str]]] = None,

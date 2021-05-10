@@ -1,6 +1,7 @@
 from sinn.histories import TimeAxis
 from .base import *
 from ._scandir import models, objectives, priors, paramsets
+from .tagcolls import *
 
 # from pathlib import Path
 # basepath=Path(__file__).parent

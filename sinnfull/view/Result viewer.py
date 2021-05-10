@@ -58,7 +58,6 @@ bokeh_opts.hist_records = bokeh_opts.hist_records(height=300)
 
 # %% tags=["remove-input"]
 rsview = RSView().filter.tags('__finished__') \
-          .filter.after(2021,4,12).filter.before(2021,4,15) \
           .list
 
 # %% [markdown] tags=["remove-cell"]
@@ -129,8 +128,9 @@ color_fn = ColorEvolCurvesByMaxL(rsview.logL_curves(filter='nofail'), quantile=.
 
 # %% tags=["remove-input"]
 logLcurves = rsview.logL_curves(color=color_fn)
-logLcurves.opts(width=300, ylim=(-12000,4500))\
-          .layout(['Λ']).cols(2)
+logLcurves.opts(width=400,
+                ylim=(None, None),#ylim=(-12000,4500)
+                ).layout(['Λ']).cols(2)
 
 # %% tags=["remove-cell"]
 ## WIP: Rescale axis individually
@@ -140,7 +140,7 @@ logLcurves.opts(width=300, ylim=(-12000,4500))\
 
 # %% tags=["remove-cell"]
 # Use the `exclude` argument to avoid plotting fixed parameters
-θ_curves = rsview.θ_curves(exclude={'M', 'Mtilde', 'A'}, color=color_fn,
+θ_curves = rsview.θ_curves(exclude={'dynamics.M', 'input.M'}, color=color_fn,
                            ground_truth=True, dynamic=False)
 
 # %% tags=["remove-input"]
