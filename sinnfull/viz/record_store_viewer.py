@@ -849,10 +849,20 @@ class FitData(BaseModel):
     def hist_index_iter(self) -> Generator[Tuple[str, Tuple[int]]]:
         """
         Yield a sequence of tuples (hist name, hist index).
+        Tuples are sorted lexicographically by hist name, then index.
         """
-        hist_names = sorted([hist.name for hist in self.model.history_set])
-        for hist_name in hist_names:
-            hist = getattr(self.model, hist_name)
+        already_seen_ids = set()
+        hists = {}
+        # We do two loops in order to sort the history names, and thus
+        # ensure consistency in the returned order.
+        for hist_name, hist in self.model.nested_histories.items():
+            if id(hist) in already_seen_ids:
+                # Histories connecting submodels will show up > 1 time.
+                continue
+            hist_ids.add(id(hist))
+            hists[hist_name] = hist
+        for hist_name in sorted(hists):
+            hist = hists[hist_name]
             for hist_index in mtb.utils.index_iter(hist.shape):
                 yield hist_name, hist_index
 
