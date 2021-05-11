@@ -15,13 +15,13 @@ kernelspec:
 
 # Wilson-Cowan
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell]
 
 from __future__ import annotations
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell]
 
 import sinnfull
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     sinnfull.setup('numpy')
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [hide-cell]
 
 from typing import Any, Optional, Union
@@ -45,7 +45,7 @@ from sinnfull.rng import draw_model_sample
 from sinnfull.models.base import Model, Param
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 __all__ = ['WilsonCowan']
 ```
 
@@ -89,7 +89,7 @@ where $\odot$ denotes the Hadamard product.
 `WilsonCowan`: Dynamical equations
 :::
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [hide-input]
 
 class WilsonCowan(Model):
@@ -168,7 +168,7 @@ class WilsonCowan(Model):
 Test parameters
 :::
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [hide-cell]
 
     @add_to('WilsonCowan')
@@ -217,7 +217,7 @@ Moreover, under those conditions these equations are also closed, since then $u$
 |${w}$| `w` | parameter | connectivity |
 |$M\in 2\mathbb{N}$| `M` | parameter | number of populations; even because populations are split into E/I pairs |
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell]
 
 WilsonCowan.update_forward_refs()
@@ -229,7 +229,7 @@ WilsonCowan.update_forward_refs()
 
 Wilson-Cowan model driven by Gaussian white noise.
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [hide-input, remove-output]
 
 if __name__ == "__main__":
@@ -264,7 +264,7 @@ if __name__ == "__main__":
     model.u[-1] = 0
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [hide-input, remove-output]
 
     # Integrate
@@ -272,7 +272,7 @@ if __name__ == "__main__":
     model.integrate(upto='end')
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [hide-input]
 
     traces = []
@@ -286,7 +286,7 @@ if __name__ == "__main__":
 
 Functions $F$ and $L$ used for the simulation above. Right panel is enlarged to show the sigmoid.
 
-```{code-cell}
+```{code-cell} ipython3
 if __name__ == "__main__":
     panels = []
     for u_arr in [np.linspace(-10, 10), np.linspace(-.03, .03)]:
@@ -308,6 +308,58 @@ if __name__ == "__main__":
     display(layout)
 ```
 
-```{code-cell}
+## Limits on optimizing $β$
+
+If we choose $β$ even modestly large, then $F$ is effectively a Heaviside function and its gradient $\nabla_β F(u)$ can be expected to become numerically zero for encountered values of $u$. This generally introduces NaNs in the cost function and breaks the optimization.
+
+Consequently, one should either make $β$ constant, or give it a prior which is sufficiently tight around 0. Note that in the former case, $h$ should be made constant along with $β$, for the same reason that a Heaviside function is non-differentiable.
+
+```{code-cell} ipython3
+if __name__ == "__main__":
+    from types import SimpleNamespace
+    import theano_shim as shim
+    from theano.printing import pprint
+    shim.load('theano')
+```
+
+```{code-cell} ipython3
+    Θ = SimpleNamespace(
+        β= shim.shared(1., 'β'),
+        h= shim.shared(0., 'h')
+    )
+    u = shim.tensor(1., name='u')
+```
+
+```{code-cell} ipython3
+    F = WilsonCowan.F(Θ, u)
+    Ffn = shim.graph.compile([], [F], givens={u:10.})
+```
+
+```{code-cell} ipython3
+    Fgrad = shim.grad(F, [Θ.β])
+    Fg = shim.graph.compile([], Fgrad, givens={u:30.})
+```
+
+```{code-cell} ipython3
+    βlst = [-10, -2 ,0, 2, 10, 30, 100, 300, 1000]
+```
+
+Evaluations of $F_β(u=10)$ for different values of $β$.
+
+```{code-cell} ipython3
+    for βval in βlst:
+        Θ.β.set_value(βval)
+        print(βval, Ffn()[0])
+```
+
+Evaluations of $F'_β(u=30)$ for different values of $β$.
+
+```{code-cell} ipython3
+    for βval in βlst:
+        Θ.β.set_value(βval)
+        print(βval, Fg()[0])
+```
+
+```{code-cell} ipython3
 
 ```

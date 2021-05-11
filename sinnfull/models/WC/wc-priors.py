@@ -4,8 +4,8 @@
 #   jupytext:
 #     text_representation:
 #       extension: .py
-#       format_name: light
-#       format_version: '1.5'
+#       format_name: percent
+#       format_version: '1.3'
 #       jupytext_version: 1.9.1
 #   kernelspec:
 #     display_name: Python (sinn-full)
@@ -13,16 +13,18 @@
 #     name: sinn-full
 # ---
 
+# %% [markdown]
 # # WC priors
 
+# %%
 from __future__ import annotations
 
-# + tags=["remove-cell"]
+# %% tags=["remove-cell"]
 if __name__ == "__main__":
     import sinnfull
     sinnfull.setup('theano')
 
-# + tags=["hide-input"]
+# %% tags=["hide-input"]
 import numpy as np
 import pymc3 as pm
 import theano_shim as shim
@@ -32,8 +34,7 @@ if __name__ == "__main__":
     from sinnfull.models._utils import truncated_histogram, sample_prior
 
 
-# -
-
+# %% [markdown]
 # :::{admonition} Definining priors
 #
 # Priors are defined by defining a [_custom PyMC3 model_](http://docs.pymc.io/api/model.html#pymc3.model.Model). Effectively this means that
@@ -55,15 +56,18 @@ if __name__ == "__main__":
 # ```
 # :::
 
+# %% [markdown]
 # :::{tip}
 # The `Constant` distribution, although provided by PyMC3, was at some point [deprecated](https://github.com/pymc-devs/pymc3/pull/2452); it's not clear from the docs if it still is, but in any case it only accepts [integer values](https://github.com/pymc-devs/pymc3/issues/2451).
 # The better alternative is thus to use `Deterministic`, which has the benefit of not showing up as a variable to optimize.
 # :::
 
+# %% [markdown]
 # ## Rich prior
 #
 # Based on the parameters used in Rich et al. (Scientific Reports, 2019).
 
+# %%
 @tag.rich
 class WC_RichPrior(Prior):
     def __init__(self, M:int, scale=1., name="", model=None):
@@ -75,7 +79,9 @@ class WC_RichPrior(Prior):
         assert scale > 0, "`scale` argument must be greater than 0."
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
         α = pm.Lognormal('α', np.log([100, 200]), 3*scale, shape=(M,))
-        β = pm.Lognormal('β', np.log(300.), 2*scale, shape=(M,))
+        #β = pm.Lognormal('β', np.log(300.), 2*scale, shape=(M,))
+        # Make β constant for fit stability (see [model notebook](./WC))
+        pm.Deterministic('β', shim.constant([300.]*M, dtype='float64'))
         # Separate sign and magnitude information of w
         A = np.concatenate((np.ones(M//2, dtype='int16'),
                             -np.ones(M//2, dtype='int16')))
@@ -85,10 +91,11 @@ class WC_RichPrior(Prior):
                               sigma=3*scale,
                               shape=(M,M))
         w = pm.Deterministic('w', A*_w_mag)
-        h = pm.Normal('h', 0., 2*scale, shape=(M,))
+        #h = pm.Normal('h', 0., 2*scale, shape=(M,))
+        pm.Deterministic('h', shim.constant([0.]*M, dtype='float64'))
 
 
-# + tags=["remove-input"]
+# %% tags=["remove-input"]
 if __name__ == "__main__":
     prior = WC_RichPrior(2)
     display(prior)
@@ -96,12 +103,12 @@ if __name__ == "__main__":
     display(sample_prior(prior).cols(3))
 
 
-# -
-
+# %% [markdown]
 # ## Default prior
 #
 # Prior with values that are all near unity. Values are otherwise arbitrary.
 
+# %%
 @tag.default
 class WC_Default(Prior):
     def __init__(self, M:int, name="", model=None):
@@ -117,20 +124,20 @@ class WC_Default(Prior):
         h = pm.Normal('h', 0., 2, shape=(M,))
 
 
-# + tags=["remove-input"]
+# %% tags=["remove-input"]
 if __name__ == "__main__":
     prior = WC_Default(2)
     display(prior)
 
     display(sample_prior(prior).cols(3))
-# -
 
+# %% [markdown]
 # ### Test
 #
 # Verify that `prior.random()` produces output which is compatible with the model parameters.
 # (In the code below, `(4,1)` is an [RNG key](/sinnfull/rng).)
 
-# + tags=["hide-input"]
+# %% tags=["hide-input"]
 if __name__ == "__main__":
     from sinnfull.models.WC.WC import WilsonCowan, TimeAxis
     prior = WC_RichPrior(2)

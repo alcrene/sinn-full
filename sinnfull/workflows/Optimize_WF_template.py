@@ -409,7 +409,7 @@ if True and exec_environment == "notebook":
             panel.opts(legend_position='top')
             panels.append(panel)
     fig = hv.Layout(panels).cols(3) \
-         .opts(framewise=True) \
+         .opts(framewise=True, title="Data sample wrt prior") \
          .opts(hv.opts.Curve(framewise=True, width=200, height=200),
                hv.opts.VLine(color='orange'))
     display(fig)
