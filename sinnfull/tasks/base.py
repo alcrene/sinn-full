@@ -63,7 +63,11 @@ from sinnfull.models import AccumulatedObjectiveFunction, Prior, models, ModelSp
 from sinnfull.optim import OptimParams, Optimizer
 
 # %% tags=["remove-cell"]
-logger = logging.getLogger(__file__)
+logger = logging.getLogger("sinnfull.tasks")
+# Silence noisy loggers
+filelocklogger = logging.getLogger("filelock")
+filelocklogger.setLevel(filelocklogger.getEffectiveLevel()+20)
+    # Make 'INFO:filelock' lower than 'DEBUG:root'
 
 # %%
 __all__ = ['CreateSyntheticDataset', 'CreateFixedSegmentSampler',
