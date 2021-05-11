@@ -170,18 +170,25 @@ def get_shim_rng(seed_key: Union[Tuple[int,...], int], exists_ok: bool=False) ->
 # %%
 import pymc3 as pm
 
-def draw_model_sample(model: 'sinn.Model', key: Optional[Tuple[int]]=None,
+def draw_model_sample(model: pm.Model, key: Optional[Tuple[int]]=None,
                       var_names: Optional[List[str]]=None, n :int=1):
     """
-    Draw `n` samples from the model.
+    Draw `n` samples from the PyMC3 model.
     Wrapper around `pymc3.sample_prior_predictive` which ensures it is
     reproducible.
     """
     # This is essentially the Prior.random() method, distilled for generic
     # PyMC3 models.
     if var_names is None:
-        var_names = [v.name for v in model.vars]
+        # var_names = [v.name for v in model.vars]
         # vars = free_RVs = all RVs which are not observed and not deterministics
+            # Using model.vars has the problem that transformed vars are
+            # omitted (they are included in model.vars, but 
+            # `sample_prior_predictive` automatically excludes them)
+        var_names = [v.name for v in model.unobserved_RVs]
+            # So instead (for now) we default to taking all unobserved RVs, and
+            # leave it up to the caller to exclude things like constant
+            # variables.
     if key is not None:
         seed = get_seedsequence(key, exists_ok=True).generate_state(1)[0]
             # exists_ok=True is safe if `key` is not used elsewhere in the code

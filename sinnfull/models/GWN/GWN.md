@@ -47,17 +47,21 @@ import numpy as np
 import theano_shim as shim
 from mackelab_toolbox.typing import (
     FloatX, Shared, Array, AnyRNG, RNGenerator,
-    IndexableNamespace as IndexableNamespaceBase)
+    IndexableNamespace as IndexableNamespaceBase, json_encoders as mtb_encoders)
 # Move with NoiseSource:
 from pydantic import BaseModel, PrivateAttr
 import sys, inspect
+import copy
 from types import SimpleNamespace
 from itertools import chain
+import mackelab_toolbox as mtb
+import mackelab_toolbox.iotools
 from sinn.histories import History
 from sinn.models import PendingUpdateFunction
 
-from sinn.models import ModelParams, Model, updatefunction, initializer
+from sinn.models import ModelParams, Model, updatefunction
 from sinn.histories import TimeAxis, Series, HistoryUpdateFunction
+from sinn.utils.pydantic import initializer, add_exclude_mask
 
 from sinnfull.utils import add_to, add_property_to
 from sinnfull.models.base import Model, Param
@@ -148,27 +152,204 @@ class GaussianWhiteNoise(BaseModel):
         return self.rng.normal(avg=μ, std=σ/shim.sqrt(dt), size=(M,))
 
     ## Stuff that could be in NoiseSource class
+    
+    class Config:
+        # Allow assigning other attributes during initialization.
+        # extra = 'allow'
+        keep_untouched = (ModelParams, PendingUpdateFunction)
+        json_encoders = {**mtb_encoders,
+                         **History.Config.json_encoders}
 
+    # These would normally be inferred by the Model metaclass
     _hist_identifiers  : List[str]=PrivateAttr(['ξ'])
     _kernel_identifiers: List[str]=PrivateAttr([])
     _model_identifiers : List[str]=PrivateAttr([])
+    _pending_update_functions: List[HistoryUpdateFunction] = \
+        PrivateAttr([ξ_upd])
 
     def initialize(self, initializer=None):
         return
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.ξ.update_function = HistoryUpdateFunction(
-            func=self.ξ_upd.upd_fn,
-            namespace=self,
-            input_names=self.ξ_upd.inputs
-        )
-        self.ξ.range_update_function = self.ξ.update_function
 ```
 
 :::{margin} Code
 As the prototype for *noise sources*, all functionality is currently implemented in `GaussianWhiteNoise`.
 :::
+
+```{code-cell} ipython3
+    @add_to('GaussianWhiteNoise')
+    def __init__(self, initializer=None, ModelClass=None, **kwargs):
+        # Recognize if being deserialized, as we do in __new__
+        if ModelClass is not None and initializer is None:
+            initializer = 'do not initialize'
+        # Any update function specification passed as argument needs to be
+        # extracted and passed to _base_initialize, because update functions
+        # can't be created until the model (namespace) exists
+        update_functions = {}
+        replace_in_dict = {}
+        kwargs = copy.copy(kwargs)
+        for attr, v in kwargs.items():
+            # Deals with the case where we initialize from a .dict() export
+            if isinstance(v, dict) and 'update_function' in v:
+                update_functions[f"{attr}.update_function"] = v['update_function']
+                update_functions[f"{attr}.range_update_function"] = v.get('range_update_function', None)
+                replace_in_dict[attr] = copy.copy(v)
+                replace_in_dict[attr]['update_function'] = None
+                replace_in_dict[attr]['range_update_function'] = None
+        # We do it this way to avoid mutating the kwargs
+        for attr, v in replace_in_dict.items():
+            kwargs[attr] = v
+        # Initialize attributes with Pydantic
+        super().__init__(**kwargs)
+        # Attach update functions to histories, and set up __slots__
+        self._base_initialize(update_functions=update_functions)
+        # Run the model initializer
+        if not isinstance(initializer, str) or initializer != 'do not initialize':
+            self.initialize(initializer)
+    # def __init__(self, **kwargs):
+    #     super().__init__(**kwargs)
+    #     self.ξ.update_function = HistoryUpdateFunction(
+    #         func=self.ξ_upd.upd_fn,
+    #         namespace=self,
+    #         input_names=self.ξ_upd.inputs
+    #     )
+    #     self.ξ.range_update_function = self.ξ.update_function
+    
+    @add_to('GaussianWhiteNoise')
+    def copy(self, *args, deep=False, **kwargs):
+        m = super().copy(*args, deep=deep, **kwargs)
+        m._base_initialize(shallow_copy=not deep)
+        # m.initialize()
+        return m
+
+    @add_to('GaussianWhiteNoise')
+    def dict(self, *args, exclude=None, **kwargs):
+        # Remove pending update functions from the dict – they are only used
+        # to pass information from the metaclass __new__ to the class __init__,
+        # and at this point already attached to the histories. Moreover, they
+        # are already included in the serialization of HistoryUpdateFunctions
+        exclude = add_exclude_mask(
+            exclude,
+            {attr for attr, value in self.__dict__.items()
+             if isinstance(value, PendingUpdateFunction)}
+        )
+        # When serialized, HistoryUpdateFunctions include the namespace.
+        # Remove this, since it is the same as `self`, and inserts a circular
+        # dependence.
+        hists = {attr: hist for attr,hist in self.__dict__.items()
+                 if isinstance(hist, History)}
+        # TODO: Any way to assert the integrity of the namespace ? We would
+        #       to execute the assertion below, but during a shallow copy, a
+        #       2nd model is created with the same histories; since `namespace`
+        #       can't point to both, the assertion fails.
+        # assert all(h.update_function.namespace is self
+        #            for h in hists.values())
+        excl_nmspc = {attr: {'update_function': {'namespace'}}
+                      for attr in hists}
+        exclude = add_exclude_mask(exclude, excl_nmspc)
+        # Proceed with parent's dict method
+        obj = super().dict(*args, exclude=exclude, **kwargs)
+        # Add the model name
+        obj['ModelClass'] = mtb.iotools.find_registered_typename(self)
+        return obj
+
+    @add_to('GaussianWhiteNoise')
+    @classmethod
+    def parse_obj(cls, obj):
+        # Add `initializer` keyword arg to skip initialization
+        if 'initializer' not in obj:
+            obj['initializer'] = 'do not initialize'
+        m = super().parse_obj(obj)
+        return m
+
+    @add_to('GaussianWhiteNoise')
+    def _base_initialize(self,
+                         shallow_copy: bool=False,
+                         update_functions: Optional[dict]=None):
+        """
+        Collects initialization that should be done in __init__, copy & parse_obj.
+
+        Both arguments are meant for internal use and documented with comments
+        in the source code.
+        """
+        # If there are submodels, make their parameters match those of the
+        # container (in particular, for Theano shared vars, the two parameter
+        # sets will point to the same instance, allowing either to be used.)
+        for submodelname, submodel in self.nested_models.items():
+            for subθname, θ in submodel.params:
+                subparams = getattr(self.params, submodelname)
+                assert subθname in subparams.__dict__, (
+                    f"Parameter set for submodel '{submodelname}' does not contain a parameter '{subθname}'.")
+                setattr(subparams, subθname, θ)
+                # Update the variable name to include the parent model.
+                # (with a guard in case we run this twice)
+                if hasattr(θ, 'name') and submodelname not in θ.name:
+                    # (There are ways the test above can fail (e.g. if the 
+                    # parameter's name is the same as the submodel's), but
+                    # those seem quite unlikely.
+                    θ.name = submodelname + "." + θ.name
+
+        if update_functions is not None:
+            # 1) update_functions should be a dict, and will override update function
+            # defs from the model declaration.
+            # This is used when deserializing a model; not really intended as a
+            # user-facing option.
+            # 2) Add @updatefunction decorator to those recognized by function deserializer
+            # To avoid user surprises, we cache the current state of
+            # HistoryUpdateFunction._deserialization_locals, update the variable,
+            # then return to the original state once we are done
+            # Remark: For explicitly passed update functions, we don't use the
+            #    'PendingUpdateFunction' mechanism, so in fact
+            #    we just replace @updatefunction by an idempotent function.
+            def idempotent(hist_nm, inputs=None):
+                def dec(f):
+                    return f
+                return dec
+            # Stash _deserialization_locals
+            stored_locals = HistoryUpdateFunction._deserialization_locals
+            # Insert substitute @updatefunction decorator
+            if 'updatefunction' not in HistoryUpdateFunction._deserialization_locals:
+                HistoryUpdateFunction._deserialization_locals = HistoryUpdateFunction._deserialization_locals.copy()
+                HistoryUpdateFunction._deserialization_locals['updatefunction'] = idempotent
+            # Attach all explicitly passed update functions
+            for upd_fn_key, upd_fn in update_functions.items():
+                if upd_fn is None:
+                    continue
+                hist_name, method_name = upd_fn_key.rsplit('.', 1)
+                hist = getattr(self, hist_name)
+                ns = upd_fn.get('namespace', self)
+                if ns is not self:
+                    raise ValueError(
+                        "Specifying the namespace of an update function is "
+                        "not necessary, and if done, should match the model "
+                        "instance where it is defined.")
+                upd_fn['namespace'] = self
+                if method_name == "update_function":
+                    hist._set_update_function(HistoryUpdateFunction.parse_obj(upd_fn))
+                elif method_name == "range_update_function":
+                    hist._set_range_update_function(HistoryUpdateFunction.parse_obj(upd_fn))
+                else:
+                    raise ValueError(f"Unknown update function '{method_name}'. "
+                                     "Recognized values: 'update_function', 'range_update_function'.")
+            # Reset deserializaton locals
+            HistoryUpdateFunction._deserialization_locals = stored_locals
+
+        # Otherwise, create history updates from the list of pending update
+        # functions created by metaclass (don't do during shallow copy – histories are preserved then)
+        if not shallow_copy:
+            for obj in self._pending_update_functions:
+                if obj.hist_nm in update_functions:
+                    # Update function is already set
+                    continue
+                hist = getattr(self, obj.hist_nm)
+                hist._set_update_function(HistoryUpdateFunction(
+                    namespace    = self,
+                    func         = obj.upd_fn,  # HistoryUpdateFunction ensures `self` points to the model
+                    inputs       = obj.inputs,
+                    # parent_model = self
+                ))
+        self._pending_update_functions = {}
+        # >>> Different from Model: no compilation attributes
+```
 
 ```{code-cell} ipython3
 ---
@@ -185,10 +366,10 @@ tags: [hide-input]
     ## HACKS to match the sinn.Model interface
     # These _might_ fix themselves if we inherit for some base Model class
 
-    @property
-    def _pending_update_functions(self):
-        return [e for e in self.__dict__.values()
-                if isinstance(e, PendingUpdateFunction)]
+    # @property
+    # def _pending_update_functions(self):
+    #     return [e for e in self.__dict__.values()
+    #             if isinstance(e, PendingUpdateFunction)]
 
     ## Copied from sinn.models.Model
 

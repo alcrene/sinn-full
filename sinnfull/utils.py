@@ -45,6 +45,12 @@ add_property_to(clsname: str)
 in_ipython() -> bool:
     Check whether we're in an ipython environment, including jupyter notebooks.
 
+Distribution utilities
+----------------------
+
+def get_scipy_dist(pymc_dist: Union[pm.model.PyMC3Variable, pm.Distribution], idx=None):
+    Given a PyMC3 variable, return the corresponding distribution from scipy.stats.
+
 Record & data set utilities
 ---------------------------
 
@@ -301,6 +307,63 @@ def in_ipython() -> bool:
     else:
         return True
 
+# %% [markdown]
+# ---------------
+# ## Distribution utilities
+
+# %%
+import numpy as np
+from scipy import stats
+import pymc3 as pm
+
+# %%
+
+def _shape_args(shape, *args, idx=None):
+    """
+    Workaround b/c stats._(…) doesn't accept size, but does accept array parameters
+    """
+    ones = np.ones(shape)
+    shaped = tuple(ones*getattr(a, 'value', a) for a in args)
+    if idx:
+        shaped = tuple(a[idx] for a in shaped)
+    return shaped
+
+def get_scipy_dist(pymc_dist: Union[pm.model.PyMC3Variable, pm.Distribution],
+                   idx=None):
+    """
+    Given a PyMC3 variable, return the corresponding distribution from
+    scipy.stats.
+    
+    Distributions are added on an as-needed basis, but generally easy to add.
+    
+    Supported distributions:
+    
+    - normal
+    - lognormal
+    """
+    dist = getattr(pymc_dist, 'distribution', pymc_dist)
+    # First deal with transformed distributions with one recursion step
+    if isinstance(dist, pm.transforms.TransformedDistribution):
+        if (isinstance(dist.dist, pm.Lognormal)
+            and isinstance(dist.transform_used, pm.transforms.Log)):
+            # Lognormal dist + log transform => normal dist
+            mu, sigma = _shape_args(
+            dist.shape, dist.dist.mu, dist.dist.sigma, idx=idx)
+            return stats.norm(loc=mu, scale=sigma)
+        else:
+            raise NotImplementedError(
+                f"Transformed Distribution {dist.transformed_used}⁻¹("
+                f"+ {dist.dist}) not yet supported.")
+    
+    # Not a transformed => Proceed
+    if isinstance(dist, pm.Normal):
+        mu, sigma = _shape_args(dist.shape, dist.mu, dist.sigma, idx=idx)
+        return stats.norm(loc=mu, scale=sigma)
+    elif isinstance(dist, pm.Lognormal):
+        mu, sigma = _shape_args(dist.shape, dist.mu, dist.sigma, idx=idx)
+        return stats.lognorm(loc=mu, s=sigma)
+    else:
+        raise NotImplementedError(f"Distribution {dist} not yet supported.")
 
 # %% [markdown]
 # ---------------

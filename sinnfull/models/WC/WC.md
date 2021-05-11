@@ -15,13 +15,13 @@ kernelspec:
 
 # Wilson-Cowan
 
-```{code-cell} ipython3
+```{code-cell}
 :tags: [remove-cell]
 
 from __future__ import annotations
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 :tags: [remove-cell]
 
 import sinnfull
@@ -29,7 +29,7 @@ if __name__ == "__main__":
     sinnfull.setup('numpy')
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 :tags: [hide-cell]
 
 from typing import Any, Optional, Union
@@ -45,7 +45,7 @@ from sinnfull.rng import draw_model_sample
 from sinnfull.models.base import Model, Param
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 __all__ = ['WilsonCowan']
 ```
 
@@ -89,7 +89,7 @@ where $\odot$ denotes the Hadamard product.
 `WilsonCowan`: Dynamical equations
 :::
 
-```{code-cell} ipython3
+```{code-cell}
 :tags: [hide-input]
 
 class WilsonCowan(Model):
@@ -168,7 +168,7 @@ class WilsonCowan(Model):
 Test parameters
 :::
 
-```{code-cell} ipython3
+```{code-cell}
 :tags: [hide-cell]
 
     @add_to('WilsonCowan')
@@ -217,7 +217,7 @@ Moreover, under those conditions these equations are also closed, since then $u$
 |${w}$| `w` | parameter | connectivity |
 |$M\in 2\mathbb{N}$| `M` | parameter | number of populations; even because populations are split into E/I pairs |
 
-```{code-cell} ipython3
+```{code-cell}
 :tags: [remove-cell]
 
 WilsonCowan.update_forward_refs()
@@ -229,7 +229,7 @@ WilsonCowan.update_forward_refs()
 
 Wilson-Cowan model driven by Gaussian white noise.
 
-```{code-cell} ipython3
+```{code-cell}
 :tags: [hide-input, remove-output]
 
 if __name__ == "__main__":
@@ -264,7 +264,7 @@ if __name__ == "__main__":
     model.u[-1] = 0
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 :tags: [hide-input, remove-output]
 
     # Integrate
@@ -272,7 +272,7 @@ if __name__ == "__main__":
     model.integrate(upto='end')
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 :tags: [hide-input]
 
     traces = []
@@ -286,7 +286,7 @@ if __name__ == "__main__":
 
 Functions $F$ and $L$ used for the simulation above. Right panel is enlarged to show the sigmoid.
 
-```{code-cell} ipython3
+```{code-cell}
 if __name__ == "__main__":
     panels = []
     for u_arr in [np.linspace(-10, 10), np.linspace(-.03, .03)]:
@@ -308,6 +308,6 @@ if __name__ == "__main__":
     display(layout)
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 
 ```

@@ -42,8 +42,8 @@ import sinn
 # %% tags=["remove-cell"]
 import logging
 logging.basicConfig()
-tasklogger = logging.getLogger("smttask.smttask")
-tasklogger.setLevel(logging.DEBUG)
+logger = logging.getLogger("sinnfull.optimize_template")
+logger.setLevel(logging.DEBUG)
 
 # %% tags=["remove-cell"]
 import functools
@@ -74,10 +74,10 @@ from sinnfull.models import TimeAxis, models, ObjectiveFunction
 
 from sinnfull.tasks import (CreateSyntheticDataset, CreateOptimizer, CreateModel,
                             CreateFixedSegmentSampler, OptimizeModel)
-from sinnfull.rng import get_np_rng, get_shim_rng
+from sinnfull.rng import get_np_rng, get_shim_rng, draw_model_sample
 from sinnfull.optim import AlternatedSGD, Recorder
 from sinnfull.optim.convergence_tests import ConstantCost, DivergingCost
-from sinnfull.utils import recursive_dict_update
+from sinnfull.utils import recursive_dict_update, get_scipy_dist
 
 from sinnfull import projectdir
 
@@ -144,9 +144,14 @@ prior_spec = ParameterSet(
     })
     # NB: Different priors may have different parameters
 
+# Draw data parameters from tighter distributions than the priors
+# This reflects the practice if making the priors broader to avoid unduly
+# influencing the fit (Gaussian priors tend to start shaping the posterier
+# even for parameter values only moderately away from their mean).
 synth_param_spec = prior_spec.copy()  # Requires sinnfull.ParameterSet
-synth_param_spec.update({'input.kwds.mu_std': 1.,        # Tip: Use dotted notation to avoid
-                         'input.kwds.logsigma_std': .5}) # quashing other params
+synth_param_spec.update({'input.kwds.mu_std': 1.,         # Tip: Use dotted notation to avoid
+                         'input.kwds.logsigma_std': 0.5,  # quashing other params
+                         'dynamics.kwds.scale': 0.25})
     
 exec_environment = "module"   # Changed to 'papermill' by sinnfull.utils.generate_task_from_nb
 
@@ -221,6 +226,12 @@ ModelClass = get_model_class(model_selector)
 
 # %%
 default_objective = sum(get_objectives(objective_selectors))
+
+# %% [markdown]
+# Retrieve the prior on the parameters. This is added to the objectives by the optimizer.
+
+# %%
+prior = get_prior(ModelClass, prior_spec)
 
 # %% [markdown]
 # Retrieve the parameter distribution used to generate synthetic data. This can be the same as the prior, but if the prior is broad, it can be a good idea to sample the data parameters from tighter distributions.
@@ -353,6 +364,56 @@ if True and exec_environment == "notebook":
     #   .replace("<b>", "").replace("</b>", "")
     #   .replace("<br>", "").replace("</br>", ""))
 
+# %%
+if True and exec_environment == "notebook":
+    panels = []
+    #prior_var_names = [
+    #    θnm for θnm, θ in synth_param_dist.model_vars.items()
+    #    if not isinstance(θ, pm.model.DeterministicWrapper)]  # FIXME: detect Constant statt Deterministic
+    #θvalset = ParameterSet(seg_iter.data.trials.trial.data[0].params.as_dict())
+    θvalset = synth_param_dist.random((param_rngkey,0), space='optim')
+    prior_var_names = list(θvalset)
+    for θnm in prior_var_names:
+        if isinstance(prior[θnm], pm.model.DeterministicWrapper):
+            logger.info(f"Skipping {θnm}: not a random variable.")
+            continue
+        θvals = θvalset[θnm]
+        shape = tuple(θvals.shape)
+        for idx in np.ndindex(shape):
+            idx_pretty = str(idx).replace('(','').replace(')','').replace(',','')
+            θpretty = f"{θnm.split('.')[-1]}{idx_pretty}"
+            θval = θvals[idx]
+            # Get D for a specific index, in case domain depends on idx
+            # (which happens for ± connectivities)
+            D = get_scipy_dist(prior[θnm], idx=idx)
+            low, high = D.a, D.b  # Scipy.stats stores domain bounds as `a`, `b` attributes
+            # If domain is unbounded, ignore 5% on each end
+            if low == -np.inf:
+                low = D.ppf(.05)
+            if high == np.inf:
+                high = D.ppf(.95)
+            # Ensure domain includes the actual sampled parameter
+            if θval < low:
+                low = θval - .05 * (high-θval)
+            if θval > high:
+                high = θval + .05 * (θval-low)
+            # Compute pdf
+            xarr = np.linspace(low, high, 100)
+            curve = hv.Curve(
+                zip(xarr, D.pdf(xarr)),
+                kdims=[θpretty], vdims=[f"p({θpretty})"], label="pdf")
+            θline = hv.VLine(θval, kdims=curve.kdims+curve.vdims,
+                             label="sample")
+            # Append to list of plot panels
+            panel = (curve * θline).opts(framewise=True).relabel(θpretty)
+            panel.opts(legend_position='top')
+            panels.append(panel)
+    fig = hv.Layout(panels).cols(3) \
+         .opts(framewise=True) \
+         .opts(hv.opts.Curve(framewise=True, width=200, height=200),
+               hv.opts.VLine(color='orange'))
+    display(fig)
+
 # %% [markdown]
 # ## Set the model parameters
 #
@@ -360,9 +421,6 @@ if True and exec_environment == "notebook":
 # - integer tuple: Used as a key to sample initialization parameters from `prior`.
 # - `'ground truth'`: Start fit from the ground truth parameters.
 # - file name: Load parameters from provided file.
-
-# %%
-prior = get_prior(ModelClass, prior_spec)
 
 # %%
 valid_options = ['ground truth', 'file', 'test']

@@ -161,12 +161,13 @@ class GaussianWhiteNoise(BaseModel):
     def initialize(self, initializer=None):
         return
 
-
 # %% [markdown]
 # :::{margin} Code
 # As the prototype for *noise sources*, all functionality is currently implemented in `GaussianWhiteNoise`.
 # :::
 
+
+    # %%
     @add_to('GaussianWhiteNoise')
     def __init__(self, initializer=None, ModelClass=None, **kwargs):
         # Recognize if being deserialized, as we do in __new__

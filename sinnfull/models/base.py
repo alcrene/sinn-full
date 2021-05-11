@@ -658,7 +658,7 @@ class Prior(PyMC_Model):
         elif space == 'optim':
             # The problem with optim vars: PyMC3 will silently drop transformed
             # variables. So instead we draw from the set of “pymc model vars”,
-            # which intermediate between the model and optim space.
+            # which are intermediate between the model and optim space.
             # After drawing, we will transform them to the optim space.
             # FIXME: The isinstance(..., Constant) is copied from optim_vars()
             model_vars = self._pymc_model_vars

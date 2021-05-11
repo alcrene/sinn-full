@@ -66,21 +66,26 @@ if __name__ == "__main__":
 
 @tag.rich
 class WC_RichPrior(Prior):
-    def __init__(self, M:int, name="", model=None):
+    def __init__(self, M:int, scale=1., name="", model=None):
+        """
+        The `scale` argument should have a value > 0 and can be used to tighten
+        or broaden the priors; it scales the standard deviation of each.
+        """
         super().__init__(name=name, model=model)
+        assert scale > 0, "`scale` argument must be greater than 0."
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
-        α = pm.Lognormal('α', np.log([100, 200]), 3, shape=(M,))
-        β = pm.Lognormal('β', np.log(300.), 2, shape=(M,))
+        α = pm.Lognormal('α', np.log([100, 200]), 3*scale, shape=(M,))
+        β = pm.Lognormal('β', np.log(300.), 2*scale, shape=(M,))
         # Separate sign and magnitude information of w
         A = np.concatenate((np.ones(M//2, dtype='int16'),
                             -np.ones(M//2, dtype='int16')))
         _w_mag = pm.Lognormal('_w',
                               mu=np.log([[ 1.60, 4.70],
                                          [ 3.00, 0.13]]),
-                              sigma=3,
+                              sigma=3*scale,
                               shape=(M,M))
         w = pm.Deterministic('w', A*_w_mag)
-        h = pm.Normal('h', 0., 2, shape=(M,))
+        h = pm.Normal('h', 0., 2*scale, shape=(M,))
 
 
 # + tags=["remove-input"]
@@ -139,4 +144,3 @@ if __name__ == "__main__":
     Prior.json_encoder(prior)  # Smoke test: serialization of prior
     WilsonCowan.Parameters(**prior.random((4,1)))
         # Smoke test: generated prior is compatible with model
-# -
