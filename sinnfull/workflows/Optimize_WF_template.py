@@ -523,62 +523,79 @@ model = CreateModel(time              = time,
 # :::
 
 # %% [markdown]
-# :::{margin} Validation
+# :::{margin} Standardize
+# - Use the path through the 'input' submodel to select latent histories.
+# :::
+
+# %%
+test_model = model.run(cache=False)
+    # FIXME: it should be possible to translate the history names using
+    #        without instantiating a model, using `model_selector['__connect__']`
+latent_hist_ids = {id(getattr(test_model, hname)) for hname in latent_hists}
+input_hist_ids = {id(h):hname for hname, h in test_model.input.nested_histories.items()}
+assert latent_hist_ids <= set(input_hist_ids), \
+    "This workflow assumes that all latent histories are part of the 'input' submodel."
+# Replace latent_hist names with name from 'input' submodel point to the same history
+latent_hists = ['input.'+input_hist_ids[histid] for histid in latent_hist_ids]
+
+# %% [markdown]
+# :::{margin} Check that
 # - `CreateModel` task returns a `Model`.
 # - Model defines a valid `stationary_stats` method.
 # :::
 
-    # %%
-    from collections.abc import Callable
-    import inspect
-    from numbers import Number
-    from sinn import History, Model
+# %%
+from collections.abc import Callable
+import inspect
+from numbers import Number
+from sinn import History, Model
 
-    test_model = model.run(cache=False)
-    required_stats = {'std'}  # The statistics used by update_hyperθ
-    hist_names = {h.name for h in test_model.history_set}
+#test_model = model.run(cache=False)
+required_stats = {'std'}  # The statistics used by update_hyperθ
+hist_names = {h.name for h in test_model.history_set}
 
-    test_model = test_model.input
-    assert all(hname.startswith('input.') for hname in latent_hists)
-    input_latent_hists = [hname.split('.',1)[1] for hname in latent_hists]
-    
-    if not isinstance(test_model, Model):
-        raise TypeError(f"`model.run()` should return a sinn Model, but instead returned a {type(test_model)}.\n"
-                        f"model_name: {model_name}\nModelClass: {ModelClass}")
+input_latent_hists = [hname.split('.',1)[1] for hname in latent_hists]
+#input_latent_hists = list(input_hist_ids.values())
 
-    if not hasattr(test_model, 'stationary_stats_eval'):
-        raise ValueError(f"{test_model.name} does not provide the required 'stationary_stats_eval' method.")
-    elif not isinstance(test_model.stationary_stats_eval, Callable):
-        raise ValueError(f"{test_model.name}.stationary_stats_eval is not callable")
+test_model = test_model.input
 
-    stats = test_model.stationary_stats_eval()
-    if not isinstance(stats, dict):
-        raise ValueError(f"{test_model.name}.stationary_stats must return a dictionary. Returned: {stats} (type: {type(stats)}).")
-    non_hist_keys = [k for k in stats if k not in hist_names]
-    if non_hist_keys:
-        raise ValueError(f"{test_model.name}.stationary_stats must return a dictionary where keys are strings matching history names. Offending keys: {non_hist_keys}.")
-    #stats = {h.name: v for h,v in stats.items()}
-    missing_hists = set(input_latent_hists) - set(stats)
-    if missing_hists:
-        raise ValueError(f"{test_model.name}.stationary_stats needs to define statistics for all latent histories. Missing: {missing_hists}.")
+if not isinstance(test_model, Model):
+    raise TypeError(f"`model.run()` should return a sinn Model, but instead returned a {type(test_model)}.\n"
+                    f"model_name: {model_name}\nModelClass: {ModelClass}")
 
-    not_a_dict = [h_name for h_name in input_latent_hists if not isinstance(stats[h_name], dict)]
-    if not_a_dict:
-        raise ValueError(f"{test_model.name}.stationary_stats[hist name] must be a dictionary. Offending entries: {not_a_dict}.")
-    missing_stats = [h_name for h_name in input_latent_hists if not required_stats <= set(stats[h_name])]
-    if missing_stats:
-        raise ValueError(f"{test_model.name}.stationary_stats must define the following statistics: {required_stats}. "
-                         f"Some or all of these are missing for the following entries: {missing_stats}.")
+if not hasattr(test_model, 'stationary_stats_eval'):
+    raise ValueError(f"{test_model.name} does not provide the required 'stationary_stats_eval' method.")
+elif not isinstance(test_model.stationary_stats_eval, Callable):
+    raise ValueError(f"{test_model.name}.stationary_stats_eval is not callable")
 
-    return_vals = {f"{h_name} - {stat}": stats[h_name][stat]
-                   for h_name in input_latent_hists for stat in required_stats}
-    does_not_return_number = {k: f"{v} (type: {type(v)})" for k,v in return_vals.items()
-                              if not isinstance(v, (Number, np.ndarray))}
-    if does_not_return_number:
-        raise ValueError(f"{test_model.name}.stationary_stats must return a nested dictionary of plain numbers or Numpy arrays. "
-                         f"Offending entries:\n{does_not_return_number}")
+stats = test_model.stationary_stats_eval()
+if not isinstance(stats, dict):
+    raise ValueError(f"{test_model.name}.stationary_stats must return a dictionary. Returned: {stats} (type: {type(stats)}).")
+non_hist_keys = [k for k in stats if k not in hist_names]
+if non_hist_keys:
+    raise ValueError(f"{test_model.name}.stationary_stats must return a dictionary where keys are strings matching history names. Offending keys: {non_hist_keys}.")
+#stats = {h.name: v for h,v in stats.items()}
+missing_hists = set(input_latent_hists) - set(stats)
+if missing_hists:
+    raise ValueError(f"{test_model.name}.stationary_stats needs to define statistics for all latent histories. Missing: {missing_hists}.")
 
-    del stats, non_hist_keys, missing_hists, not_a_dict, missing_stats, return_vals, does_not_return_number
+not_a_dict = [h_name for h_name in input_latent_hists if not isinstance(stats[h_name], dict)]
+if not_a_dict:
+    raise ValueError(f"{test_model.name}.stationary_stats[hist name] must be a dictionary. Offending entries: {not_a_dict}.")
+missing_stats = [h_name for h_name in input_latent_hists if not required_stats <= set(stats[h_name])]
+if missing_stats:
+    raise ValueError(f"{test_model.name}.stationary_stats must define the following statistics: {required_stats}. "
+                     f"Some or all of these are missing for the following entries: {missing_stats}.")
+
+return_vals = {f"{h_name} - {stat}": stats[h_name][stat]
+               for h_name in input_latent_hists for stat in required_stats}
+does_not_return_number = {k: f"{v} (type: {type(v)})" for k,v in return_vals.items()
+                          if not isinstance(v, (Number, np.ndarray))}
+if does_not_return_number:
+    raise ValueError(f"{test_model.name}.stationary_stats must return a nested dictionary of plain numbers or Numpy arrays. "
+                     f"Offending entries:\n{does_not_return_number}")
+
+del stats, non_hist_keys, missing_hists, not_a_dict, missing_stats, return_vals, does_not_return_number
 
 
 # %% [markdown]
