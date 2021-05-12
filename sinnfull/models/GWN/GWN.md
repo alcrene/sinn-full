@@ -49,7 +49,7 @@ from mackelab_toolbox.typing import (
     FloatX, Shared, Array, AnyRNG, RNGenerator,
     IndexableNamespace as IndexableNamespaceBase, json_encoders as mtb_encoders)
 # Move with NoiseSource:
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, PrivateAttr, validator
 import sys, inspect
 import copy
 from types import SimpleNamespace
@@ -129,6 +129,9 @@ class GaussianWhiteNoise(BaseModel):
         μ   : Shared[FloatX, 1]
         logσ: Shared[FloatX, 1]
         M   : Union[int,Array[np.integer,0]]
+        @validator('M')
+        def only_plain_ints(cls, v):  # Theano RNG only accepts plain
+            return int(v)             # or Theano int, not NumPy array
     params: GaussianWhiteNoise.Parameters
 
     ξ  : Series=None
@@ -176,6 +179,10 @@ As the prototype for *noise sources*, all functionality is currently implemented
 :::
 
 ```{code-cell} ipython3
+---
+jupyter:
+  source_hidden: true
+---
     @add_to('GaussianWhiteNoise')
     def __init__(self, initializer=None, ModelClass=None, **kwargs):
         # Recognize if being deserialized, as we do in __new__
