@@ -700,7 +700,7 @@ latents_recorder = LatentsRecorder(optimizer)
 #   > Depending on circumstance, `diverging_cost` may be too strict for fits starting from ground truth parameters, since those start with a relatively high likelihood.
 
 # %%
-constant_cost = ConstantCost(cost_recorder='log L', tol=0.3, n=4)
+constant_cost = ConstantCost(cost_recorder='log L', tol=2**-8, n=4)
 diverging_cost = DivergingCost(cost_recorder='log L', maximize=True)
 
 # %% [markdown]

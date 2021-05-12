@@ -203,7 +203,7 @@ class ConstantCost(ConvergenceTest):
     __serialized_type__: constr(regex="^ConstantCost$")="ConstantCost"
         # Used to prevent deserializing into a different subclass; each subclass must define a different name
     cost_recorder: str
-    tol          : PositiveFloat=0.3
+    tol          : PositiveFloat=2**-8  # ~0.03
     n            : conint(gt=1)
 
     def __call__(self, recorders: Dict[str,Recorder], optimizer: Optimizer):
