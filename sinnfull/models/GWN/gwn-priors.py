@@ -86,6 +86,34 @@ if __name__ == "__main__":
 
 
 # %% [markdown]
+# ## Fixed mean prior
+#
+# When used as Gaussian white noise process is used as random input for a model, fits can be rather sensitive to its mean $μ$, introducing bias in the inferred values of other parameters. If this value is known, fixing it may help reduce biases.
+
+# %%
+@tag.fixed_mean
+class GWN_FixedMeanPrior(Prior):
+    def __init__(self, M:int, mu, logsigma_mean=0., logsigma_std=1.,
+                        name="", model=None):
+        super().__init__(name=name, model=model)
+        pm.Deterministic('M', shim.constant(M, dtype='int16'))
+        μval = shim.broadcast_to(mu, (M,))
+        pm.Deterministic('μ', shim.constant(μval, dtype=shim.config.floatX))
+        #pm.Deterministic('μ', shim.broadcast_to(
+        #    shim.constant(mu, dtype=shim.config.floatX), (M,)))
+        logσ = pm.Normal('logσ', logsigma_mean, logsigma_std, shape=(M,))
+
+
+# %% tags=["remove-input"]
+if __name__ == "__main__":
+    prior = GWN_FixedMeanPrior(2, mu=-1.3)
+    display(prior)
+    
+    print("μ = ", prior.μ.eval())
+    display(sample_prior(prior).cols(3))
+
+
+# %% [markdown]
 # ## Zero-mean prior
 #
 # This prior fixes the mean to 0.
@@ -95,11 +123,7 @@ if __name__ == "__main__":
 class GWN_ZeroMeanPrior(Prior):
     def __init__(self, M:int, logsigma_mean=0., logsigma_std=1.,
                         name="", model=None):
-        super().__init__(name=name, model=model)
-        pm.Deterministic('M', shim.constant(M, dtype='int16'))
-        pm.Deterministic('μ', shim.broadcast_to(
-            shim.constant(0, dtype=shim.config.floatX), (M,)))
-        logσ = pm.Normal('logσ', logsigma_mean, logsigma_std, shape=(M,))
+        return GWN_FixedMean(M, 0, logsigma_mean, logsigma_std, name, model)
 
 
 # %% tags=["remove-input"]
@@ -107,6 +131,7 @@ if __name__ == "__main__":
     prior = GWN_ZeroMeanPrior(2)
     display(prior)
     
+    print("μ = ", prior.μ.eval())
     display(sample_prior(prior).cols(3))
 
 # %% [markdown]
