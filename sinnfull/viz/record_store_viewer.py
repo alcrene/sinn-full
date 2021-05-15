@@ -859,7 +859,7 @@ class FitData(BaseModel):
             if id(hist) in already_seen_ids:
                 # Histories connecting submodels will show up > 1 time.
                 continue
-            hist_ids.add(id(hist))
+            already_seen_ids.add(id(hist))
             hists[hist_name] = hist
         for hist_name in sorted(hists):
             hist = hists[hist_name]
@@ -1114,7 +1114,8 @@ class FitData(BaseModel):
             η = self.ground_truth_η()  # η: xarray.Dataset
             # Reduced number of data points the date so that files aren't so big
             stops = self.model.time.stops_array
-            interpolated_stops = np.linspace(stops[0], stops[-1], bokeh_opts.η_curve_points)
+            interpolated_stops = np.linspace(stops[0], stops[-1],
+                                             bokeh_opts.η_curve_points)
             # Create a Curve for each variable component
             curves = {}
             for hist_name, hist_index in self.hist_index_iter:
@@ -1164,7 +1165,10 @@ class FitData(BaseModel):
             for hist_name, trace in zip(self.latents_evol.keys, traces):
                 hist = getattr(model, hist_name)
                 hist.unlock()
-                hist[:] = np.array(trace)
+                hist[:len(trace)-hist.pad_left] = np.array(trace)
+                    # `hist` expects an AxisIndex, which is the number of bins
+                    # after t0idx. Since `trace` also includes the padding bins,
+                    # we subtract them
                 hist.lock()
             # Set parameters to closest recorded parameters and integrate the model
             # FIXME: Fix Recorder.also_record so we don't have to hide warnings
@@ -1177,22 +1181,32 @@ class FitData(BaseModel):
             # Integrate the model with parameters at this step
             model.update_params(Θvals)
             model.clear()
-            model.integrate(upto='end', histories='all')
+            # The model may be longer than the traces, so we can't just
+            # integrate up to 'end' (`integrate` in any case won't integrate
+            # beyond the cur_tidx of locked histories, but will display a warning)
+            tnidx = max(h.cur_tidx for h in model.history_set)
+            model.integrate(upto=tnidx, histories='all')
             # Reduced number of data points the date so that files aren't so big
-            stops = model.time.stops_array
-            interpolated_stops = np.linspace(stops[0], stops[-1], bokeh_opts.η_curve_points)
+            tn = model.get_time(tnidx)
+            start = getattr(model.t0, 'magnitude', model.t0)
+            end = getattr(tn, 'magnitude', tn)
+            # Choose a number of points consistent with the resolution of
+            # ground_truth_η, which has `η_curve_points` and goes up to model.tn
+            n_points = int(round( tnidx/model.time.tnidx*bokeh_opts.η_curve_points  ))
+            interpolated_stops = np.linspace(start, end, n_points)
             # Create all the history curves
-            for hist in model.history_set:
+            for name, hist in model.nested_histories.items():
                 trace = hist.get_data_trace()
+                times = hist.time_stops
                 for hist_index in mtb.utils.index_iter(hist.shape):
-                    dimname = hist.name+''.join(str(i) for i in hist_index)
+                    dimname = name+''.join(str(i) for i in hist_index)
                     dim = key_dims.get(dimname)
                     y = trace[(slice(None),)+hist_index]
                     data = np.stack((interpolated_stops,
-                                     np.interp(interpolated_stops, stops, y)),
+                                     np.interp(interpolated_stops, times, y)),
                                     axis=1)
                     # Create the latent hist curve
-                    panel_key = HistKey(hist.name, StrTuple(hist_index))
+                    panel_key = HistKey(name, StrTuple(hist_index))
                     curves[panel_key] = hv.Curve(data,  kdims=['time'], vdims=[dim])
         return hv.HoloMap(curves, kdims=HistKey.kdims).opts(framewise=True)
 
@@ -1958,8 +1972,9 @@ class RSView(smttask.RecordStoreView):
         panels = []
         split_len = len(self.kdims)
         fit_len = len(FitData.FitKey._fields)
-        for component_idx in init_map.keys():
-            def dyn_wrapper(*args, idx=component_idx):
+        # for component_idx in init_map.keys():
+        for histnm, histidx in init_fit.hist_index_iter:
+            def dyn_wrapper(*args, idx=(histnm,StrTuple(histidx))):
                 # Unpack *args into SplitKey, FitKey, step
                 split_key, args = args[:split_len], args[split_len:]
                 fit_key, args = args[:fit_len], args[fit_len:]

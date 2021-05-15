@@ -598,11 +598,11 @@ class AlternatedSGD(Optimizer):
                 # The unpadded number of time bins
             # TODO: assert data.time.dt == self.model.time.dt
             # TODO: Match data.time to h.time ?
-            for h in self.observed_hists.values():
+            for hname, h in self.observed_hists.items():
                 assert h.locked
                 h.unlock()
                 Δi = max_pad_left - h.pad_left
-                h[:h.t0idx+K] = data[h.name][Δi:]
+                h[:h.t0idx+K] = data[hname][Δi:]
                     # NB: By using AxisIndex objects here, we make use of
                     # AxisIndex's validation to ensure each history uses
                     # the right padding and goes exactly up to K.
@@ -652,10 +652,10 @@ class AlternatedSGD(Optimizer):
 
             else:
                 latents = self.latent_cache[segmentkey]
-                for h in self.latent_hists.values():
+                for hname, h in self.latent_hists.items():
                     h.unlock()
                     #latent_data = self.get_latent_estimate(h, data)
-                    h[:] = latent[h.name]
+                    h[:] = latent[hname]
                     h.lock(warn=False)
                 # TODO: initial conditions
                 #for h,v in self.init_conds.items():

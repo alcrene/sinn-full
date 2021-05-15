@@ -42,7 +42,7 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from xarray import DataArray, Dataset
-from pydantic import BaseModel, validator
+from pydantic import BaseModel, PrivateAttr, validator, root_validator
 from pydantic.typing import ClassVar
 import pydantic.parse
 
@@ -77,27 +77,67 @@ class SyntheticTrial(BaseTrial):
     init_cond: IndexableNamespace
     seed     : int
     keynames : ClassVar[Tuple[str,str,str]]=('Θ_hash', 'ic_hash', 'seed')
-
-    @validator('params', 'init_cond', pre=True)
-    def fix_params(cls, ns):
-        """Convert possibly symbolic/shared parameters to numeric values.
-        This prevents them from being modified elsewhere.
-        """
-        if isinstance(ns, ModelParams):
-            ns = ns.get_values()
-        # Deserialize Arrays manually, since IndexableNamespace does not do it
-        for key, val in ns.items():
-            if json_like(val, 'Array'):
-                ns[key] = Array.validate(val)
-        return ns
-
-    def __init__(self, params, init_cond, seed, model=None):
+    model    : Optional[Model]=None
+        
+    @root_validator(pre=True)
+    def params_from_model(cls, values):
+        params = values.get('params', None)
+        model = values.get('values', None)
+        # If needed, use `model` to construct `params` from a dictionary
         if isinstance(params, (dict,IndexableNamespace)):
             if model is None:
                 raise ValueError("If `params` is passed as a dictionary, "
                                  "`model` must also be provided.")
             else:
                 params = model.Parameters(**params)
+            values['params'] = params
+        return values
+
+    @validator('params', 'init_cond', pre=True)
+    def fix_params(cls, ns):
+        """
+        Convert possibly symbolic/shared parameters to numeric values.
+        This prevents them from being modified elsewhere.
+        """
+        if isinstance(ns, ModelParams):
+            ns = ns.get_values()
+        return ns
+            
+    @validator('params', 'init_cond', pre=True)
+    def flatten_nested_params(cls, ns):
+        """
+        Standardize the form of `params` and `init_cond` so that code doesn't
+        need to worry about hierarchies.
+        """
+        # Especially if the parameters are being deserialized from smt record
+        # parameters, the lower levels can be array objects
+        # {'submodel': array({'subhist': ['Array', …]}, dtype=object) }
+        new_ns = {}
+        for k, v in ns.items():
+            if isinstance(v, np.ndarray) and v.dtype is np.dtype('O'):
+                v = v[()]
+            if isinstance(v, dict):
+                v = cls.flatten_nested_params(v)
+                for subk, subv in v.items():
+                    new_ns[f"{k}.{subk}"] = subv
+            else:
+                new_ns[k] = v
+        return new_ns
+        
+    @validator('params', 'init_cond', pre=True)
+    def deserialize_arrays(cls, ns):
+        """
+        Deserialize Arrays manually, since IndexableNamespace does not do it
+        """
+        for key, val in ns.items():
+            if json_like(val, 'Array'):
+                ns[key] = Array.validate(val)
+        return ns
+            
+    @root_validator
+    def check_init_cond(cls, values):
+        init_cond = values.get('init_cond', None)
+        model = values.get('values', None)
         if model is not None:
             hists_to_init = {nm for nm,h in model.nested_histories.items()
                              if h.pad_left}
@@ -115,10 +155,16 @@ class SyntheticTrial(BaseTrial):
                 #                  f"conditions: {init_hists - hists_to_init}.")
                 init_cond = {k: ic for k, ic in init_cond.items()
                               if k in hists_to_init}
-                assert set(init_cond.keys()) == hists_to_init
+                assert set(init_cond.keys()) == hists_to_init, \
+                    "Despite being explicitely constructed to do so, the subset of initial condition keys doesn't match the histories which need initial conditions."
+                values['init_cond'] = init_cond
             else:
                 assert False, "There should be no code path leading here."
-        super().__init__(params=params, init_cond=init_cond, seed=seed)
+        # Return
+        return values
+        
+    # def __init__(self, params, init_cond, seed, model=None):
+    #     super().__init__(params=params, init_cond=init_cond, seed=seed)
 
     @property
     def key(self):
@@ -308,7 +354,10 @@ class SyntheticDataAccessor(BaseAccessor):
                                       'unit': model.time.unit})
 
         # Return an xarray Dataset
-        return utils.dataset_from_histories(model.unlocked_histories)
+        unlocked_hists = {nm: h for nm, h in model.nested_histories.items()
+                          if not h.locked}
+        return utils.dataset_from_histories(unlocked_hists.values(),
+                                            names=unlocked_hists.keys())
 
 # %% [markdown]
 # ## Example

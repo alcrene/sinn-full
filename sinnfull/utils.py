@@ -370,15 +370,28 @@ def get_scipy_dist(pymc_dist: Union[pm.model.PyMC3Variable, pm.Distribution],
 # ## Record & data set utilities
 
 # %%
-from typing import Iterable, Sequence, NamedTuple, Dict
+from typing import Optional, Iterable, Sequence, NamedTuple, Dict
 import xarray as xr
+# from sinn import History   # Can't import here because types must be frozen first
 
 # %%
-def dataset_from_histories(histories: Iterable) -> xr.Dataset:
+def dataset_from_histories(histories: Iterable['sinn.History'],
+                           names: Optional[Iterable[str]]=None) -> xr.Dataset:
+    """
+    Combine a list of histories into an xarray Dataset.
+    
+    Parameters
+    ----------
+    histories: Histories to combine
+    names: (Optional) Name to assign to each history in the returned Dataset.
+        If not provided, the `name` attribute of each history is used.
+    """
     # TODO: How should we deal with padding ?
     data_arrays = {}
     time_array = None
-    for h in histories:
+    if names is None:
+        names = [h.name for h in histories]
+    for h, nm in zip(histories, names):
         # Use the same time array for all history DataArrays
         if time_array is None:
             time_array = xr.DataArray(h.time_stops,
@@ -390,15 +403,15 @@ def dataset_from_histories(histories: Iterable) -> xr.Dataset:
             assert (h.time.stops_array == time_array.data).all()
             assert h.time.dt == time_array.attrs['dt']
             assert h.time.unit == time_array.unit
-        hist_dims = [f"{h.name}_dim{i}" for i in range(h.ndim)]
+        hist_dims = [f"{nm}_dim{i}" for i in range(h.ndim)]
         array = xr.DataArray(
             h.get_data_trace(),
-            name=h.name,
+            name=nm,
             coords={'time': time_array},
             dims=['time'] + hist_dims,
             attrs={'dt': time_array.attrs['dt']}
         )
-        data_arrays[h.name] = array
+        data_arrays[nm] = array
 
     # Return an xarray Dataset
     return xr.Dataset(data_arrays)
