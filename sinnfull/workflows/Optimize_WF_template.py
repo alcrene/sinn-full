@@ -104,7 +104,7 @@ nsteps = 5000
 fit_hyperθ_updates = {}
 task_save_location = 'tasklist'
 step_kwargs = {}
-model_rngkey = 1
+model_rngkey = (1,)
 optimizer_rngkey = 2
 param_rngkey = 3   # Base key: keys are generator as (param_key, i)
 sim_rngkey = 4     # Base key: keys are generator as (sim_key, i)
@@ -478,7 +478,7 @@ if hasattr(modelΘ_init, 'get_values'):
 model = CreateModel(time              = time,
                     model_selector    = model_selector,
                     params            = modelΘ_init,
-                    rng_key           = (model_rngkey,))
+                    rng_key           = model_rngkey)
                     #submodel_selectors= submodel_selectors,
                     #connect           = submodel_connections)
 
@@ -700,7 +700,7 @@ latents_recorder = LatentsRecorder(optimizer)
 #   > Depending on circumstance, `diverging_cost` may be too strict for fits starting from ground truth parameters, since those start with a relatively high likelihood.
 
 # %%
-constant_cost = ConstantCost(cost_recorder='log L', tol=2**-8, n=4)
+constant_cost = ConstantCost(cost_recorder='log L', tol=2**-5, n=12)
 diverging_cost = DivergingCost(cost_recorder='log L', maximize=True)
 
 # %% [markdown]
