@@ -63,7 +63,7 @@ if not os.path.exists("tasklist"):
 # For more details, see [the model's notebook](../models/WC/WC).
 
 # %%
-n_fits         = 1  # Number of different initial conditions to draw
+n_fits         = 11  # Number of different initial conditions to draw
 θ_learning_rates = [0.0002]
 θ_clip         = 100.
 
@@ -81,14 +81,17 @@ default_learning_params = optim_paramsets['WC'].default
 prior_spec = ParameterSet(
     {'input'   : {'selector': ('GWN', 'default'),
                   'kwds': dict(mu_mean=[-0.25, -0.5],
+    #{'input'   : {'selector': ('GWN', 'fixed_mean'),
+    #              'kwds': dict(mu=[-0.25, -0.5],
                                logsigma_mean=[-1., -1.],
                                M=2)},
      'dynamics': {'selector': ('WC', 'rich'),
                   'kwds': dict(M=2)}
     })
 synth_param_spec = prior_spec.copy()  # Requires sinnfull.ParameterSet
-synth_param_spec.update({'input.kwds.mu_std': 1.,        # Tip: Use dotted notation to avoid
-                         'input.kwds.logsigma_std': .5}) # quashing other params
+synth_param_spec.update({'input.kwds.mu_std': 1.,         # Tip: Use dotted notation to avoid
+                         'input.kwds.logsigma_std': 0.5,  # quashing other params
+                         'dynamics.kwds.scale': 0.25})
 
 # %%
 params = [
@@ -99,6 +102,7 @@ params = [
          default_learning_params = default_learning_params,
          fit_hyperθ_updates={'params': {'λθ':λθ, 'clip': θ_clip, 'b1': 1., 'b2': 1.}},
          Θ_init_key = Θ_init_key,
+         model_rngkey = latent_init_key,  # Determines initialization of the latent
          optimizer_rngkey= 2,    # Affects drawn batch samples during iterations
          sampler_rngkey  = 5,    # Affects the data segment drawn for each iteration
          # Data
@@ -111,12 +115,15 @@ params = [
          latent_hists        =[],
          objective_selectors = objective_selectors,
          prior_spec          = prior_spec,
-         model_rngkey        = 1,   # Affects initial integration during the fit
         )
-    for Θ_init_key in [(6,i) for i in range(n_fits)] + ['ground truth']
+    for Θ_init_key, latent_init_key in 
+        [((6,i), (1,i)) for i in range(n_fits)] + [('ground truth', (1,0))]
     for λθ in θ_learning_rates
     for nsteps in [5000]
 ]
+for p in params:
+    if p['latent_hists']:
+        p['task_save_location'] += "-latents"
 
 # %% [markdown]
 # ## Wilson-Cowan model with white noise latent (unknown) input
@@ -128,40 +135,47 @@ params = [
 # - We add fit hyperparameters for the latent variables (prefixed with `η`).
 # - `"dynamics.I"` is now listed as a _latent_ history.[^1]
 #
-# [^1] We could use `"inputs.ξ"` instead of `"dynamics.I"`; the two point to the same history.
+# [^1] We could use `"input.ξ"` instead of `"dynamics.I"`; the two point to the same history.
 
 # %%
-model_name     = "Ricker"
-n_fits         = 35  # Number of different initial conditions to draw
+n_fits         = 11  # Number of different initial conditions to draw
 θ_learning_rates = [0.0002]
 η_learning_rates = [0.001]
 θ_clip         = 100.
 η_clip         = 100.
-task_save_location = "tasklist"
-# # mkdir tasklist
-params = []
 
 # %%
-prior = priors[model_name].default(M=1)
 params = [
-    dict(reason=f"Example fit - {model_name} model"
+    dict(#reason=f"Example - {model_name_from_selector(model_selector)}",
+         reason=f"Test: random latent init - {model_name_from_selector(model_selector)}",
          task_save_location = task_save_location + f"/n{nsteps}",
+         # Fit
          nsteps=nsteps,
-         fit_hyperθ_updates={'params': {'λθ':λθ, 'clip': θ_clip, 'b1': 1., 'b2': 1.},
-                             'latents':{'λη':λη, 'clip': η_clip}},
+         default_learning_params = default_learning_params,
+         fit_hyperθ_updates={'params': {'λθ':λθ, 'clip': θ_clip, 'b1': 1., 'b2': 1.}},
          Θ_init_key = Θ_init_key,
-         model = model_name,
-         observed_hists    =["N"],
-         latent_hists      =["e"],
-         default_objective = objectives[model_name].logp_forward,
-         default_model_params = model_params[model_name].default,
-         default_learning_params = learning_params[model_name].default,
-         prior = prior
+         model_rngkey = latent_init_key,  # Determines initialization of the latent
+         optimizer_rngkey= 2,    # Affects drawn batch samples during iterations
+         sampler_rngkey  = 5,    # Affects the data segment drawn for each iteration
+         # Data
+         synth_param_spec = synth_param_spec,
+         param_rngkey    = 3,    # Affects the parameters drawn for the synthetic dataset
+         sim_rngkey      = 4,    # Affects the model integrator used to generate synthetic data
+         # Model
+         model_selector      = model_selector,
+         observed_hists      =["dynamics.u"],
+         latent_hists        =["dynamics.I"],
+         objective_selectors = objective_selectors,
+         prior_spec          = prior_spec,
         )
-    for θ_init_key in [(5,i) for i in range(n_fits)] + ['ground truth']
+    for Θ_init_key, latent_init_key in 
+        [((6,i), (1,i)) for i in range(1,n_fits+1)] + [('ground truth', (1,0))]
     for λθ in θ_learning_rates for λη in η_learning_rates
-    for nsteps in [5000]
+    for nsteps in [25000]
 ]
+for p in params:
+    if p['latent_hists']:
+        p['task_save_location'] += "-latents"
 
 # %% [markdown]
 # ## Create the tasks
@@ -178,6 +192,7 @@ params = [
 # ```
 #
 # Then just paste the returned code block _below_ the parameter block into the *Optimize_WF_template* notebook and run it.  
+# (Change the value *exec_environment* to `'notebook'` to actually run the created Task.)  
 # ::::
 
 # %% [markdown]

@@ -25,7 +25,7 @@ setup(
           # Packages installed from repositories
           'parameters',
           'pymc3',
-          'pydantic<1.8',  # Because of https://github.com/samuelcolvin/pydantic/issues/2422
+          'pydantic',
           'sumatra>=0.8dev',
           'theano_shim>=0.3.0',
           'mackelab_toolbox[iotools,typing,utils,parameters]>=0.2.0a1',

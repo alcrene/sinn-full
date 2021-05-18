@@ -166,7 +166,8 @@ if Θ_init_key[0] == '(':
 g = globals()
 for param in ['default_hyperparams', 'fit_hyperθ_updates',
               'synth_param_spec', 'prior_spec',
-              'model_selector',  'objective_selectors']:
+              'model_selector',  'objective_selectors',
+              'model_rngkey']:
     pval = g[param]
     if isinstance(pval, str):
         pval = literal_eval(pval)
@@ -651,12 +652,6 @@ optimizer = CreateOptimizer(
     logp_latents           =latents_objective,
     #convergence_tests      =[constant_cost, diverging_cost]
 )
-
-# %% [markdown]
-# mod = model.run()
-
-# %% [markdown]
-# mod.dynamics.u.cur_tidx
 
 # %% [markdown]
 # ## Optimization task

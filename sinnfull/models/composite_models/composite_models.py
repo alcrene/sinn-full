@@ -138,8 +138,8 @@ if __name__ == "__main__":
     # Parameters
     rng_sim = get_shim_rng((1,0), exists_ok=True)
         # exists_ok=True allows re-running the cell
+    Θ_gwn = paramsets.GWN.default
     Θ_wc  = paramsets.WC.rich
-    Θ_gwn = paramsets.GWN.rich
     assert Θ_wc.M == Θ_gwn.M
     time  = TimeAxis(min=0, max=.4, step=2**-10)
 
@@ -158,13 +158,20 @@ if __name__ == "__main__":
     model = ObservedDynamics(
         time    =time,
         input   =noise,
-        dynamics=dyn
+        dynamics=dyn,
+        params  ={'input': Θ_gwn, 'dynamics': Θ_wc}
     )
 
 # %% [markdown]
 # :::{margin}  Formatted representation
 # Model representations are nicely formatted in a Jupyter notebook.
 # :::
+
+    # %%
+    # Assert that the noise history (ξ) only gets exported once, and does so
+    # tied to the input submodel
+    assert 'ξ' in model.dict()['input'].keys()
+    assert 'I' not in model.dict()['dynamics'].keys()
 
     # %% tags=["remove-cell"]
     from IPython.display import display
