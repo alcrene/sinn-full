@@ -9,10 +9,10 @@ A complete, end-to-end workflow template for inferring dynamical models, so you 
 - **Modular workflows**  
   Add new data sources, models or optimizers components without changing those that already suit your problem.
 - **Modular models**  
-  Dynamical systems are defined in a way that closely parallels their equations, thanks to the functionality of [sinn](https://github.com/mackelab/sinn).
+  Dynamical systems are defined in a way that closely parallels their equations, thanks to the functionality of [Sinn](https://github.com/mackelab/sinn).
   + Only the parameters and update equations need to be specified.
     + In particular, each equation is defined _separately_, which means they can also be tested separetely. This makes extending and modifying complex models _much_ easier.
-  + _sinn_ models automatically assemble their equations into a complete simulator, which can be called with their  `integrate` method.
+  + _Sinn_ models automatically assemble their equations into a complete simulator, which can be called with their  `integrate` method.
   + Equations are translated to C-code and compiled using [aesara](https://aesara.readthedocs.io), enabling fast simulation.
     + Translation can be done with either the default Theano generator or the newer (but experimental) [JAX generator](https://docs.pymc.io/notebooks/GLM-hierarchical-jax.html).
   + **Objective functions can be automatically differentiated through the entire simulator,** enabling the optimization of complex model with analytical gradients.
@@ -27,7 +27,7 @@ A complete, end-to-end workflow template for inferring dynamical models, so you 
 
 ## Getting started
 
-1. Click the [“Use this template” button](https://github.com/alcrene/sinn-full/generate) in the GitHub interface.
+1. Click the [“Use this template” button](https://github.com/alcrene/sinnvoll/generate) in the GitHub interface.
 2. Choose a project name and answer the prompts.
 3. Clone your new project onto your computer.
 4. From within the local copy, run \
@@ -41,7 +41,7 @@ A complete, end-to-end workflow template for inferring dynamical models, so you 
 You are now ready to start running the examples and to develop your own models.
 
 :::{hint}  
-The pages of this book were generated directly from sinn-full's source code, so they can be used as a code browser.  
+The pages of this book were generated directly from Sinn-full's source code, so they can be used as a code browser.  
 :::
 
 :::{attention}  
@@ -52,11 +52,11 @@ This template is still in beta. If you find an example which doesn't work, pleas
 To ease reading, not all code cells are included in these generated pages – in particular, boilerplate imports are generally skipped. If you are trying to reproduce outputs, make sure to start from the actual source (*.py*) files !  
 :::
 
-## Relationship to sinn
+## Relationship to Sinn
 
-We built [sinn](https://github.com/mackelab/sinn) to address a specific goal: to construct differentiable objective functions from dynamical models, and thus allow their optimization with the same technology as that used to train neural networks. While it is possible to use sinn [on its own](https://github.com/mackelab/sinn/tree/master/examples/Random-RNN), we found that it was difficult for users to translate this into workflows for their own problems. And with good reason – there is a lot more to a good machine learning workflow than just defining an objective function !
+We built [Sinn](https://github.com/mackelab/sinn) to address a specific goal: to construct differentiable objective functions from dynamical models, and thus allow their optimization with the same technology as that used to train neural networks. While it is possible to [use Sinn on its own](https://github.com/mackelab/sinn/tree/master/examples/Random-RNN), we found that it was difficult for users to translate this into workflows for their own problems. And with good reason – there is a lot more to a good machine learning workflow than just defining an objective function !
 
-*sinn-full* is a complete workflow intended to get you (and ourselves !) started with a new *sinn* project as soon as possible. The intention is to use *sinn-full* as a starting point, adding and changing elements as dictated by the requirements of the projects. And since *sinn-full* includes examples that run out of the box, each change can be tested immediately, leading to faster and more confident development.
+*Sinn-full* is a complete workflow intended to get you (and ourselves !) started with a new *Sinn* project as quickly as possible. The intention is to use *Sinn-full* as a starting point, adding and changing elements as dictated by the requirements of the projects. And since *Sinn-full* includes examples that run out of the box, each change can be tested immediately, leading to faster and more confident development.
 
 ## Running examples
 
@@ -176,7 +176,7 @@ jb toc . && grep -v __init__ _toc.yml | grep -v setup | grep -v "/_" | grep -v c
 
 {> Short project description <}
 
-Based on the [sinn-full](https://github.com/alcrene/sinn-full) project template.
+Based on the [Sinn-full](https://github.com/alcrene/sinnvoll) project template.
 
 ## Installation
 
