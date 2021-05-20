@@ -105,7 +105,7 @@ fit_hyperθ_updates = {}
 task_save_location = 'tasklist'
 step_kwargs = {}
 model_rngkey = (1,)
-optimizer_rngkey = 2
+optimizer_rngkey = (2,0)
 param_rngkey = 3   # Base key: keys are generator as (param_key, i)
 sim_rngkey = 4     # Base key: keys are generator as (sim_key, i)
 sampler_rngkey = 5
@@ -167,7 +167,7 @@ g = globals()
 for param in ['default_hyperparams', 'fit_hyperθ_updates',
               'synth_param_spec', 'prior_spec',
               'model_selector',  'objective_selectors',
-              'model_rngkey']:
+              'model_rngkey', 'optimizer_rngkey']:
     pval = g[param]
     if isinstance(pval, str):
         pval = literal_eval(pval)
@@ -639,7 +639,7 @@ def update_hyperθ(optimizer):
 ## Instantiate the optimizer ##
 optimizer = CreateOptimizer(
     model                  =model,
-    rng_key                =(optimizer_rngkey,),
+    rng_key                =optimizer_rngkey,
     data_segments          =segment_iterator,
     observed_hists         =observed_hists,
     latent_hists           =latent_hists,
@@ -760,7 +760,7 @@ if True and exec_environment == "notebook":
 
 # %%
 if exec_environment == "notebook":
-    result = optimize.run(record=False, recompute=True)
+    result = optimize.run(record=True, recompute=True)
 
 # %% [markdown]
 # ---

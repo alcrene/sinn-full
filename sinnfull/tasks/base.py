@@ -394,7 +394,7 @@ def CreateModel(
 @MemoizedTask(json_encoders=sinnfull.json_encoders)
 def CreateOptimizer(
     model             : Model,
-    rng_key           : Union[Tuple[int], int],
+    rng_key           : Union[Tuple[int,...], int],
     data_segments     : SegmentSampler,
     observed_hists    : Sequence[Union[History,str]],
     latent_hists      : Sequence[Union[History,str]],
