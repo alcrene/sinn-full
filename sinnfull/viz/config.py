@@ -84,11 +84,12 @@ class BokehOpts(metaclass=Singleton):
         hv.opts.HLine(
             color='k', alpha=1, line_width=1.5, level='underlay'))
 
-    # FIXME: Use a palette colour
     # FIXME: Also define Curve styling ?
     true_η: hv.Options = default_factory('true_η', lambda:
         hv.opts.Area(
-            color='#a1c9f4'))
+            fill_color="#E8E8E8",
+            line_width=0)
+    )
 
     # Dynamic options
     def table(self, nrows) -> hv.Options:
