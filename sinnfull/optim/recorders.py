@@ -259,6 +259,13 @@ class Recorder(GenericModel, Generic[ValueT]):
     def __len__(self):
         return len(self.steps)
 
+    @property
+    def last_step(self):  # Mostly for consistency with 'last'
+        return self.steps[-1]
+    @property
+    def last(self):
+        return {k: v for k,v in zip(self.keys, self.values[-1])}
+
     def __getitem__(self, key):
         """
         If `key` is a string:
@@ -273,6 +280,9 @@ class Recorder(GenericModel, Generic[ValueT]):
 
             >>> idx = self.steps.index(key)
             >>> {k:v for k,v in zip(self.keys, self.values[idx])}
+            
+            Exception: If the recorder does not define keys, then
+            ``self.values[idx]`` is simply returned.
 
         If `key` is a list:
             Triggers Numpy-like fancy-indexing: a list of arrays is returned,
@@ -334,8 +344,11 @@ class Recorder(GenericModel, Generic[ValueT]):
         else:
             if isinstance(key, Integral):
                 idx = self.steps.index(int(key))
-                return {k:v for k,v in zip(self.keys, self.values[idx])}
-                    # Casting int allows for numpy integers
+                # NB: Casting int allows for numpy integers
+                if self.keys:
+                    return {k:v for k,v in zip(self.keys, self.values[idx])}
+                else:
+                    return self.values[idx]
             else:
                 try:
                     i = self.keys.index(key)

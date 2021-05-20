@@ -321,6 +321,9 @@ class SyntheticDataAccessor(BaseAccessor):
             # trial = Trial(params=trial, model=self.model)
             # if trial.key not in self.trials:
             #     raise ValueError("Parameters do not match those of any defined trial.")
+        elif isinstance(trial, tuple):
+            # TODO: Only use this branch if format is plausibly a trial key
+            trial = self.trials.sel(trialkey=trial).trial.data[()]
         else:
             assert isinstance(trial, self.Trial)
         return trial
