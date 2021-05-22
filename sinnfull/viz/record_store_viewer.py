@@ -1161,7 +1161,25 @@ class FitData(BaseModel):
                     panel_key = HistKey(hist.name, StrTuple(hist_index))
                     curves[panel_key] = hv.Curve([], kdims=['time'], vdims=[dim])
         else:
-            traces = self.latents_evol.values[step_index]
+            traces = {k:v for k,v in zip(self.latents_evol.keys,
+                                         self.latents_evol.values[step_index])}
+            if hasattr(self.latents_evol, 'segment_keys'):
+                segmentkey = self.latents_evol.segment_keys[step_index]
+            else:
+                segmentkey = None
+            if segmentkey:
+                # Shift the time arrays so that they start with the same value
+                # as the data
+                *trialkey, t0, stop, tstep = segmentkey
+                    # We only need t0
+                if tstep:
+                    dt = model.time.dt; dt = getattr(dt, 'magnitude', dt)
+                    assert np.isclose(dt, tstep)
+                assert all(h.time.t0 == model.time.t0 for h in model.history_set)
+                shift_time_t0(model.time, t0)
+                for h in model.history_set:
+                    shift_time_t0(h.time, t0)
+                assert all(h.time.t0 == model.time.t0 for h in model.history_set)
             for hist_name, trace in zip(self.latents_evol.keys, traces):
                 hist = getattr(model, hist_name)
                 hist.unlock()
@@ -1178,6 +1196,10 @@ class FitData(BaseModel):
             rootlogger.setLevel(logging.ERROR)
             Θvals = self.get_Θ_at_step(step)
             rootlogger.setLevel(logging_level)
+            # If we are in optimization space, transform the variables appropriately
+            # TODO?: If `θspace` were saved as an attribute, we should just check that
+            if not set(Θvals) <= set(self.prior.model_vars):
+                Θvals = self.prior.backward_transform_params(Θvals)
             # Integrate the model with parameters at this step
             model.update_params(Θvals)
             model.clear()

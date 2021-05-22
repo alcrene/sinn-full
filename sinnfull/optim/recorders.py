@@ -625,6 +625,15 @@ class ΘRecorder(Recorder[Tuple[Array,...]]):
 class LatentsRecorder(Recorder[List[Array['float64']]]):
     name    ='latents'
     interval: RecorderInterval=1.65
+    segment_keys: List[tuple]=[]
+        # TODO?: Option not to record 'segment_key' ? Would that be useful ?
+
+    @validator('segment_keys', pre=True)
+    def unpack_array(cls, v):
+        "It is plausible that in some cases, key elements could be saved as arrays."
+        v = [[Array.validate(w) if json_like(w, 'Array') else w for w in key]
+             for key in v]
+        return v
 
     # NOTE: The synchronization with the ΘRecorder doesn't currently work when
     # recorders are deserialized, because the optimizer is then missing.
@@ -657,10 +666,22 @@ class LatentsRecorder(Recorder[List[Array['float64']]]):
             kwargs['also_record'] = [Θ_recorder]
         super().__init__(**kwargs)
 
+    # TODO: Extend ready() so that new segments are recorded independent of step
+
     @staticmethod
     def default_callback(optimizer):
         return tuple(h.get_data_trace(include_padding=True) for h in optimizer.latent_hists.values())
 
+    def record(self, step, optimizer):
+        # Copied from Recorder.record
+        # Assumes steps are monotonically increasing
+        if len(self.steps) == 0 or self.steps[-1] != step:
+            self.steps.append(step)
+            self.values.append(self.callback(optimizer))
+            self.segment_keys.append(optimizer.current_segment_key)
+            # By including this loop inside the conditional, we prevent cycles between recorders
+            for recorder in self.also_record:
+                recorder.record(step, optimizer)
 
 # %% [markdown]
 # ---
