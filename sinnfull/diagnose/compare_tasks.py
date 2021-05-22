@@ -17,6 +17,10 @@ taskfile1 = "../workflows/tasklist/n5000/OptimizeModel__543fa9d7eb__nsteps_5000.
 taskfile2 = "../workflows/tasklist/n5000/OptimizeModel__d5cb560448__nsteps_5000.taskdesc.json"
 
 # %%
+taskfile1 = "../workflows/test-exported-optimize-task1.taskdesc.json"
+taskfile2 = "../workflows/test-exported-optimize-task2.taskdesc.json"
+
+# %%
 with open(taskfile1) as f:
     json1 = f.read()
 with open(taskfile2) as f:

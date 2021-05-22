@@ -726,6 +726,21 @@ optimize = OptimizeModel(reason   =reason,
                          convergence_tests      =[constant_cost, diverging_cost]
                         )
 
+# %%
+# Test that task serialization is idempotent
+# (If this fails, use diagnose/compare_tasks to identify where the change occurred)
+if False:
+    from smttask import Task
+    import json
+    optimize.save("test-exported-optimize-task1")
+    task2 = Task.from_desc("test-exported-optimize-task1.taskdesc.json")
+    task2.save("test-exported-optimize-task2")
+    with open("test-exported-optimize-task1.taskdesc.json") as f:
+        json1 = f.read()
+    with open("test-exported-optimize-task2.taskdesc.json") as f:
+        json2 = f.read()
+    assert json1 == json2
+
 # %% [markdown]
 # ## Export or run the task
 #
