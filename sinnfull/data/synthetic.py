@@ -45,6 +45,7 @@ from xarray import DataArray, Dataset
 from pydantic import BaseModel, PrivateAttr, validator, root_validator
 from pydantic.typing import ClassVar
 import pydantic.parse
+from sinn.utils.pydantic import add_exclude_mask
 
 from sinnfull.parameters import ParameterSet
 from sinnfull.typing_ import IndexableNamespace
@@ -73,16 +74,16 @@ class SyntheticTrial(BaseTrial):
     # Inherited from BaseTrial:
     # - Config: extra='forbid'
     # - __hash__
+    model    : Optional[Model]=None  # Only used for initialization; not exported by default
     params   : IndexableNamespace
     init_cond: IndexableNamespace
     seed     : int
     keynames : ClassVar[Tuple[str,str,str]]=('Θ_hash', 'ic_hash', 'seed')
-    model    : Optional[Model]=None
         
     @root_validator(pre=True)
     def params_from_model(cls, values):
-        params = values.get('params', None)
-        model = values.get('values', None)
+        params = values.get('params')
+        model = values.get('model')
         # If needed, use `model` to construct `params` from a dictionary
         if isinstance(params, (dict,IndexableNamespace)):
             if model is None:
@@ -162,6 +163,15 @@ class SyntheticTrial(BaseTrial):
                 assert False, "There should be no code path leading here."
         # Return
         return values
+        
+    def dict(self, *args, exclude=None, **kwargs):
+        """
+        The `model` attribute is excluded by default, since it is only used
+        to initialize `params`. Exporting it in each trial also wastes a lot 
+        of space.
+        """
+        exclude = add_exclude_mask(exclude, {'model'})
+        return super().dict(*args, exclude=exclude, **kwargs)
         
     # def __init__(self, params, init_cond, seed, model=None):
     #     super().__init__(params=params, init_cond=init_cond, seed=seed)
@@ -276,7 +286,7 @@ class SyntheticDataAccessor(BaseAccessor):
         desc['trials']['coords']['trialkey']['data'] = index
         # Call cls.Trial on each data point
         trial_dict = desc['trials']['data_vars']['trial']
-        trial_dict['data'] = [cls.Trial(**trialdata, model=model) for trialdata in trial_dict['data']]
+        trial_dict['data'] = [cls.Trial(**{**trialdata, 'model':model}) for trialdata in trial_dict['data']]
         # Assemble trials Dataset now that dict is emended
         trials = xr.Dataset.from_dict(desc['trials'])
         accessor.add_trials(trials)
@@ -328,23 +338,25 @@ class SyntheticDataAccessor(BaseAccessor):
             assert isinstance(trial, self.Trial)
         return trial
 
-    @lru_cache(maxsize=4)  # 4 is a wild guess
     def load(self, trial):
-        # Normalize `trial`
-        trial = self.get_trial(trial)
+        # Wraps _load. By normalizing the argument before calling the memoized
+        # function, we reduce cache misses.
+        return self._load(self.get_trial(trial))
+        
+    @lru_cache(maxsize=4)  # 4 is a wild guess
+    def _load(self, trial: SyntheticTrial):
         model = self.model
 
-        # Set the RNG for reproducible runs
-        if len(model.rng_inputs) > 1:
-            raise RuntimeError("The behaviour of the synthetic DataAccessor is "
-                               "undefined for models with more than one RNG.")
-        model.reseed_rngs(trial.seed)
-
-        # Create the data by integrating the model
+        # Set model parameters to those of the trial
         model.update_params(trial.params)
         for histname, init_val in trial.init_cond.items():
             hist = model.nested_histories[histname]
             hist[:hist.t0idx] = init_val
+            
+        # Set the RNG for reproducible runs
+        model.reseed_rngs(trial.seed)  # Raises NotImplementedError if there is more than one RNG
+
+        # Create the data by integrating the model
         model.integrate(upto='end', histories='all')
         if hasattr(model, 'remove_degeneracies'):
             model.remove_degeneracies()
