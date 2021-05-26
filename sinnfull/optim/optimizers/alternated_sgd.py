@@ -596,8 +596,15 @@ class AlternatedSGD(Optimizer):
                 # Some of these will be used to set ICs (i.e. the padding bins)
             K = K_padded - max_pad_left
                 # The unpadded number of time bins
-            # TODO: assert data.time.dt == self.model.time.dt
-            # TODO: Match data.time to h.time ?
+            # Assert that the data and model have the same time step
+            dt = self.model.time.dt; dt = getattr(dt, 'magnitude', dt)
+            assert np.isclose(np.diff(data.time[:2]), dt)
+            # Align the new t0 with the data, shifted by the number of pad bins
+            t0 = data.time.data[max_pad_left] * self.model.time.unit
+            shift_time_t0(self.model.time, t0)
+            for h in self.model.history_set:
+                shift_time_t0(h.time, t0)
+
             for hname, h in self.observed_hists.items():
                 assert h.locked
                 h.unlock()

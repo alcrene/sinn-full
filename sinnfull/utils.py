@@ -72,6 +72,9 @@ get_field_values(records: Sequence[NamedTuple]) -> Dict[str,list]:
 def model_name_from_selector(model_selector: dict) -> str:
     Return a string summarizing the model described by `model_selector`.
     E.g. "ObservedDynamics[GaussianWhiteNoise,WilsonCowan]"
+    
+def shift_time_t0(time_axis: sinn.TimeAxis, t0: float):
+    Shift the values of `time_axis` such that their t0 is equal to `t0`.
 
 Task creation
 -------------
@@ -512,6 +515,33 @@ def model_name_from_selector(model_selector: dict) -> str:
                               for SubmodelClass in submodel_classes.values()) \
                      + ']'
     return model_str
+
+# %%
+def shift_time_t0(time_axis: 'sinn.TimeAxis', t0: float):
+    """
+    Shift the values of `time_axis` such that their t0 is equal to `t0`.
+    Noop if no shift is necessary.
+    This modifies `time_axis` in-place.
+    """
+    # Check if we need to do anything
+    if time_axis.t0 == t0:
+        return
+    # Convert t0 to axis units, then remove the units (since the underlying
+    # RangeMapping, and thus x0, doesn't have units)
+    t0 = time_axis.magnitude_in_axis_units(t0)
+    # Reminder:
+    # - TimeAxis is a subclass of RangeAxis
+    # - The `stops` attribute of RangeAxis is a RangeMapping, with x0 and index_range
+    # Set the new x0 (the actual underlying lying attribute is x0, since Axis is not only for time)
+    time_axis.stops.x0 = time_axis.stops.x0.dtype.type(t0)  # Ensure x0 type is preserved
+    # Remove any cached stops_array, since they are no longer valid
+    try:
+        del time_axis.stops._stops_array
+    except AttributeError:
+        pass
+    # Update the min_ & max_ of the RangeAxis
+    time_axis.min_ = time_axis.stops[time_axis.stops.index_range[0]]
+    time_axis.max_ = time_axis.stops[time_axis.stops.index_range[-1]]
 
 # %% [markdown]
 # ---------------
