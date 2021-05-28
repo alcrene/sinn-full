@@ -388,6 +388,17 @@ class AlternatedSGD(Optimizer):
         Tηr = self.fit_hyperparams['Tηr'] * self.model.time.unit
         return Tηb + Tηr < self.data_segments.T
 
+    @property
+    def current_segment_key(self) -> tuple:
+        return getattr(self, '_current_segment_key', None)
+
+    @property
+    def current_segment_range(self) -> Tuple[Quantity, Quantity]:
+        """NB: Returned range is inclusive on both ends."""
+        *trialkey, start, end, step = self.current_segment_key
+        unit = self.model.time.unit
+        return (start*unit, end*unit)
+
     def dict(self, *args, **kwargs):
         """
         Do the same thing with logp functions as Optimizer does with histories:
