@@ -169,10 +169,33 @@ if __name__ == "__main__":
 # :::
 
     # %%
+    model
+
+    # %%
     # Assert that the noise history (ξ) only gets exported once, and does so
     # tied to the input submodel
     assert 'ξ' in model.dict()['input'].keys()
     assert 'I' not in model.dict()['dynamics'].keys()
+
+    # %%
+    # Instead, on export, 'I' is added to the list of connected histories
+    assert "dynamics.I" in model.dict()['history_connections'].values()
+
+    # %%
+    # Assert that deserialization correctly reconnects histories
+    from sinnfull.models import models
+    model = models.ObservedDynamics(
+        time    =time,
+        input   =noise,
+        dynamics=dyn,
+        params  ={'input': Θ_gwn, 'dynamics': Θ_wc}
+    )
+
+    model2 = models.ObservedDynamics.parse_obj(model.dict())
+    assert model2.input.ξ is model2.dynamics.I
+
+    model2 = models.ObservedDynamics.parse_raw(model.json())
+    assert model2.input.ξ is model2.dynamics.I
 
     # %% tags=["remove-cell"]
     from IPython.display import display
@@ -212,14 +235,13 @@ if __name__ == "__main__":
         # ParameterSet builds a dictionary by splitting on '.' in RV names
     
     create_model = CreateModel(
-        time   =time,
-        model  ='ObservedDynamics',
-        params ={},
-        rng_key=(0,1),
-        submodels = {'input':'GaussianWhiteNoise',
-                     'dynamics': 'WilsonCowan'},
-        subparams = {'input': Θ.input, 'dynamics': Θ.dynamics},
-        connect=['GaussianWhiteNoise.ξ -> WilsonCowan.I']
+        time          =time,
+        model_selector= {'__root__'   : {'ObservedDynamics'},
+                         'input'      : {'GaussianWhiteNoise'},
+                         'dynamics'   : {'WilsonCowan'},
+                         '__connect__': ['GaussianWhiteNoise.ξ -> WilsonCowan.I']},
+        params       = {'input': Θ.input, 'dynamics': Θ.dynamics},
+        rng_key      =(0,1)
     )
     model2 = create_model.run()
 
