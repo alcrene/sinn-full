@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from warnings import warn
 from types import SimpleNamespace
-from typing import List
+from typing import List, Sequence
 import numpy as np
 import theano_shim as shim
 import sinn
@@ -26,9 +26,14 @@ data = "Call `load_record` before other functions in this module."
 ηhist = "Call `load_record` before other functions in this module."
     # The history to investigate (in particular, the one for which λη is calculated)
 
+# TODO: Change to the functions below
+
 class RecordData:
     """
     Wraps a FitData objects and adds introspection attributes/methods.
+
+    .. Note:: Needs to be updated; see `set_to_step`. We should be able to do
+       without globabl variables.
     """
     record: RecordView
     task: Task
@@ -124,7 +129,10 @@ class RecordData:
         The model is then set to have the latents at `ηstep` and the parameters
         at `θstep`.
 
-        .. Note: Unless the Θ and latent recorders are synchronized such that there
+        .. Warning:: The module-scode `step_to_step` function below is much
+           improved compared to this one and should be used instead.
+
+        .. Note:: Unless the Θ and latent recorders are synchronized such that there
            is an `θstep` matching each `ηstep`, the reconstructed state may differ
            slightly from the one which occurred during training.
         """
@@ -160,6 +168,213 @@ def set_to_zero():
     with sinn.utils.unlocked_hists(*model.history_set):
         for h in model.history_set:
             h[:] = 0
+
+
+## Changing the state of an optimizer ##
+# Recreate the state of an optimizer based on recorded state
+
+from warnings import warn
+from types import SimpleNamespace
+from typing import Union, Dict
+import xarray as xr
+import sinn
+from sinn.utils import unlocked_hists
+from sinnfull.utils import dataset_from_histories
+from sinn.utils import unlocked_hists
+from sinnfull.utils import shift_time_t0
+
+DataType = Union[Dict[str,Union[sinn.History,np.ndarray]], xr.Dataset]
+def merge_data(timeaxis: sinn.TimeAxis, data: Union[DataType, Sequence[DataType]]) -> xr.Dataset:
+
+    if isinstance(data, xr.Dataset):
+        pass
+
+    elif isinstance(data, Sequence):
+        if any(isinstance(d, Sequence) for d in data):
+            warn("While `merge_data` will work with nested lists, it is more "
+                 "efficient to flatten them first.")
+        data = xr.merge([merge_data(timeaxis, d) for d in data])
+
+    elif isinstance(data, dict):
+        # `data` is just a dict; we need to figure out the time length
+        # by inspecting the data
+        hist_items = {hnm: h for hnm, h in data.items()
+                      if isinstance(h, sinn.History)}
+        array_items = {hnm: d for hnm, d in data.items()
+                       if isinstance(d, np.ndarray)}
+        if len(hist_items) + len(array_items) != len(data):
+            received_types = set(type(d) for d in data.values())
+            raise TypeError("`data` elements must be either Histories or "
+                            "ndarrays. Received elements of the following "
+                            f"types: {received_types}.")
+
+        # Convert NumPy arrays to xarray DataArrays
+        data_arrays = []
+        for hnm, hdata in array_items.items():
+            coords = {'time': timeaxis.stops_array[:len(hdata)]}
+            data_arrays.append(xr.DataArray(
+                name=hnm,
+                data=hdata,
+                coords={'time': timeaxis.stops_array[:len(hdata)]},
+                dims=['time'] + [f'{hnm}_{i}' for i in range(1, hdata.ndim)]
+            ))
+
+        # Construct `data` by merging DataArrays with a DataSet
+        # from the histories.
+        if hist_items:
+            data = dataset_from_histories(
+                hist_items.values(), names=hist_items.keys())
+            if data_arrays:
+                data = xr.merge([data, *data_arrays])
+        else:
+            data = xr.merge(data_arrays)
+
+    else:
+        raise TypeError("`data` must either be an xr.Dataset, a dictionary "
+                        "of sinn.Histories and/or numpy arrays, or a list "
+                        "of these types. Instead received a value of type "
+                        f"{type(data)}.")
+
+    # At this point we can assume data to be xr.Dataset
+
+    # Remove bins from the end if not all histories have a value
+    # NB: It's normal to have unequal *left* bin limits, because of padding.
+    # Assumption: forward time, causal model.
+    # We can't use `dropna`, because we want to keep the left padding
+    time_idcs_to_drop = []
+    for tidx in range(len(data.time)-1, -1, -1):
+        if any(any(v) for v in np.isnan(data.isel(time=tidx)).data_vars.values()):
+            time_idcs_to_drop.append(tidx)
+        else:
+            break
+    if time_idcs_to_drop:
+        data = data.drop_isel(time=time_idcs_to_drop)
+
+    # Return data
+    return data
+
+def set_model(model,
+              data: Union[Dict[str,Union[sinn.History,np.ndarray]],
+                          xr.Dataset],
+              params: Union[SimpleNamespace, dict]):
+    """
+    Set the model to a particular state, with give history data
+    and parameter values.
+    """
+    ## Input normalization ##
+    data = merge_data(model.time, data)
+
+    # From this point we can assume that `data` is an xr.Dataset
+
+    ## Set history values ##
+    max_pad_left = max(h.pad_left for hnm, h in model.nested_histories.items()
+                       if hnm in data.data_vars.keys())
+        # We need this much of the initial data points to initialize
+        # (Only consider histories in the provided data)
+    missing_init = [hnm for hnm, h in model.nested_histories.items()
+                    if not h.locked and h.pad_left and hnm not in data.data_vars.keys()]
+    if missing_init:
+        raise ValueError("Initialization data must be provided for unlocked "
+                         "histories if their padding is > 0. Data for the "
+                         f"following histories is missing: {sorted(missing_init)}.")
+    K_padded = model.time.Index.Delta(len(data.time))
+    K = K_padded - max_pad_left
+        # The unpadded number of time bins
+    # Clear the model, so that any unset histories are recomputed
+    model.clear()
+
+    ## Set parameter values ##
+    # (This sets cur_tidx back to -1, so do this before hist updates)
+    model.update_params(params)
+
+    # TODO: assert data.time.dt == self.model.time.dt
+    # TODO: Match data.time to h.time ?
+    # Now set all histories to the values provided by `data`
+    t0idx = data.time.searchsorted(model.time.t0)
+        # Because `data` may include padding bins, and model.time typically
+        # does not, t0 in the data and in model.time may not be the same.
+    for hname, hdata in data.data_vars.items():
+        h = getattr(model, hname)
+        with unlocked_hists(h):
+            h[:h.t0idx+K] = hdata[t0idx-h.pad_left:]
+                # NB: By using AxisIndex objects here, we make use of
+                # AxisIndex's validation to ensure each history uses
+                # the right padding and goes exactly up to K.
+                # For the difference between axis and data indices, see
+                # https://sinn.readthedocs.io/en/latest/axis.html#indexing
+
+    if hasattr(model, 'remove_degeneracies'):
+        model.remove_degeneracies()
+
+def set_to_step(optimizer, fitdata, step, verbose=True):
+    """
+    Set the model to one of the inference steps.
+    This will look for the nearest step `ηstep` (relative to `step`) at which
+    the latents were recorded, and then the nearest step `θstep` (relative to
+    `ηstep`) at which parameters were recorded.
+    The model is then set to have the latents at `ηstep` and the parameters
+    at `θstep`.
+
+    .. Note: Unless the Θ and latent recorders are synchronized such that there
+       is an `θstep` matching each `ηstep`, the reconstructed state may differ
+       slightly from the one which occurred during training.
+    """
+    if step == -1:
+        step = fitdata.latents_evol.steps[-1]
+    ηstep = fitdata.latents_evol.get_nearest_step(step)
+    θstep = fitdata.Θ_evol.get_nearest_step(ηstep)
+    ηstepidx = fitdata.latents_evol.steps.index(ηstep)
+    if verbose:
+        print(f"Setting to optimization step {ηstep}.")
+    if ηstep != θstep:
+        warn("ηstep and θstep differ; reconstructed state will differ from "
+             "the state which occurred during the optimization.\n"
+             f"ηstep: {ηstep}\tθstep: {θstep}")
+
+    # Recover data at step ηstep -- Copied from FitData.η_curves
+    model = optimizer.model
+    if hasattr(fitdata.latents_evol, 'segment_keys'):
+        segmentkey = fitdata.latents_evol.segment_keys[ηstepidx]
+    else:
+        segmentkey = None
+    if segmentkey:
+        *trialkey, t0, stop, tstep = segmentkey
+        dt = model.time.dt; dt = getattr(dt, 'magnitude', dt)
+        # Shift time arrays so they start with the same value as the data
+        max_pad_left = max(h.pad_left for h in optimizer.observed_hists.values())
+        t0 += max_pad_left * dt
+            # When the optimizer draws data segments, it reserves this `max_pad_left`
+            # time bins to set the initial conditions (see `Optimizer.draw_data_segment`)
+        if tstep:
+            assert np.isclose(dt, tstep)
+        shift_time_t0(model.time, t0)
+        for h in model.history_set:
+            shift_time_t0(h.time, t0)
+        # Find the number of padding time bins we need to initialize the observed hists
+        Δ = max(h.pad_left for h in optimizer.observed_hists.values())
+        # Retrieve the observed data for the corresponding slice
+        observed_data = (fitdata.data_accessor.load(tuple(trialkey))
+                         [[hnm for hnm in optimizer.observed_hists]]  # Keep only observed histories
+                         .sel(time=slice(t0 - Δ*dt, stop)))  # Index the corresponding time, adding enough padding so that the data's t0 is actually t0
+                            # NB: multiplying dt like this is numerically fragile, but should be fine for small Δ (< 100 or so)
+
+    latents = fitdata.latents_evol[ηstep]
+
+    # If parameters are in optim space, transform them to model space
+    Θvals = fitdata.Θ_evol[θstep]
+    assert set(Θvals) <= set(fitdata.prior.optim_vars)
+    Θvals_model = fitdata.prior.backward_transform_params(Θvals)
+
+    # Set the optimizer's model
+    set_model(optimizer.model,
+              data=[latents, observed_data],
+              params=Θvals_model)
+    K = optimizer.model.cur_tidx - optimizer.model.t0idx + 1
+    optimizer.Kshared.set_value(K.plain)
+    # Set the optimizer's parameters
+    optimizer.Θ.set_values(Θvals)
+    # Set the optimizer step
+    optimizer.stepi = ηstep
 
 ## Inspection of parameters ##
 
