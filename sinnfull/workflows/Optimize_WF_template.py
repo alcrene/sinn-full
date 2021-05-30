@@ -688,14 +688,14 @@ latents_recorder = LatentsRecorder(optimizer)
 #
 # We add two tests for stopping a fit early:
 #
-# - `constant_cost` will return `Converged` if the last 4 recorded $\log L$ values are all within 0.3 of each other.<br>
-#   (Equiv to: for any given pair, one parameter set is at most 35% ($= 1 - e^{0.3}$) more likely than the other.)
+# - `constant_cost` will return `Converged` if the last $n$ recorded $\log L$ values are all within $tol$ of each other.<br>
+#   (Equiv to: for any given pair, one parameter set is at most ($1 - e^{tol}$)% more likely than the other.)
 # - `diverging_cost` will return `Failed` if the current cost value is lower than the initial value, or NaN.<br>
 #   This is based on the observation that randomly initialized fits almost always start with a sharp increase in the $\log L$. If further iterations annul this initial progress, the fit does not seem able to make stable progress.
 #   > Depending on circumstance, `diverging_cost` may be too strict for fits starting from ground truth parameters, since those start with a relatively high likelihood.
 
 # %%
-constant_cost = ConstantCost(cost_recorder='log L', tol=2**-5, n=12)
+constant_cost = ConstantCost(cost_recorder='log L', tol=2**-7, n=12)
 diverging_cost = DivergingCost(cost_recorder='log L', maximize=True)
 
 # %% [markdown]
