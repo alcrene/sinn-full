@@ -33,7 +33,7 @@ for i, (c1, c2) in enumerate(zip(json1, json2)):
         print(json1[i-10:i+50])
         print(json2[i-10:i+50])
         quiet = True
-    elif quiet and c1 == c2:
+    elif quiet and json1[i-5:i+1] == json2[i-5:i+1]:
         quiet = False
 
 
