@@ -3,7 +3,6 @@
 # jupyter:
 #   jupytext:
 #     formats: py:percent
-#     notebook_metada_filter: -jupytext.text_representation.jupytext_version
 #     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
 #     text_representation:
 #       extension: .py

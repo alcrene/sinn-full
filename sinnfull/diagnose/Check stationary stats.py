@@ -9,9 +9,9 @@
 #       format_version: '1.3'
 #       jupytext_version: 1.9.1
 #   kernelspec:
-#     display_name: Python (sinnfull)
+#     display_name: Python (sinn-full)
 #     language: python
-#     name: sinnfull
+#     name: sinn-full
 # ---
 
 # %% [markdown]
