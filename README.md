@@ -34,7 +34,7 @@ A complete, end-to-end workflow template for inferring dynamical models, so you 
    `python3 rename.py <projectname>` \
    This will replace all occurrences of “sinnfull” with your chosen project name.
 5. Run the _install.sh_ script.
-   - This will work on Linux and MacOS. If you are on Windows, or prefer to know what you are installing, see [Installation](#installation).
+   - This will work on Linux and MacOS. If you are on Windows, or prefer to know what you are installing, see the [Installation](#installation) instructions below.
 6. Run `smttask init`, as indicated by the installation script.
 7. (Optional but recommended) [Change the master entropy value](sinnfull/rng.py).
 
@@ -54,7 +54,7 @@ To ease reading, not all code cells are included in these generated pages – in
 
 ## Relationship to Sinn
 
-We built [Sinn](https://github.com/mackelab/sinn) to address a specific goal: to construct differentiable objective functions from dynamical models, and thus allow their optimization with the same technology as that used to train neural networks. While it is possible to [use Sinn on its own](https://github.com/mackelab/sinn/tree/master/examples/Random-RNN), we found that it was difficult for users to translate this into workflows for their own problems. And with good reason – there is a lot more to a good machine learning workflow than just defining an objective function !
+[Sinn](https://github.com/mackelab/sinn) was built to address a specific goal: to construct differentiable objective functions from dynamical models, and thus allow their optimization with the same technology as that used to train neural networks. While it is possible to [use Sinn on its own](https://github.com/mackelab/sinn/tree/master/examples/Random-RNN), we found that it was difficult for users to translate this into workflows for their own problems. And with good reason – there is a lot more to a good machine learning workflow than just defining an objective function !
 
 *Sinn-full* is a complete workflow intended to get you (and ourselves !) started with a new *Sinn* project as quickly as possible. The intention is to use *Sinn-full* as a starting point, adding and changing elements as dictated by the requirements of the projects. And since *Sinn-full* includes examples that run out of the box, each change can be tested immediately, leading to faster and more confident development.
 
@@ -67,9 +67,13 @@ We built [Sinn](https://github.com/mackelab/sinn) to address a specific goal: to
 - Click the notebook's “Run all cells” button.
 - To later create batches of runs, open the [command palette](https://jupyterlab.readthedocs.io/en/stable/user/commands.html) and ensure that a checkmark is present beside “Pair Notebook with ipynb file”. Now save the file to create the paired notebook _Optimize_WF_template.ipynb_.
 
-> The same file – _Optimize_WF_template_ – is used both for single, in-the-notebook execution, and to create  batches of runs. This allows you to execute and debug your workflow directly in a notebook, and then use that same notebook to generate low-running parameter sweeps – without changing a single line of code.
+::: {note}  
+The same file – _Optimize_WF_template_ – is used both for single, in-the-notebook execution, and to create  batches of runs. This allows you to execute and debug your workflow directly in a notebook, and then use that same notebook to generate low-running parameter sweeps – without changing a single line of code.  
+:::
 
-> The _Optimize_WF_template_ is the highest-level description of the inference problem, and the file you are mostly likely to modify regularly. It is worth reading through the inlined explanations to understand how model, optimizer and objective function are combined into an optimization task.
+::: {hint}
+The _Optimize_WF_template_ is the highest-level description of the inference problem, and the file you are mostly likely to modify regularly. It is worth reading through the inlined explanations to understand how model, optimizer and objective function are combined into an optimization task.  
+:::
 
 ### Run an example workflow
 
@@ -78,11 +82,14 @@ We built [Sinn](https://github.com/mackelab/sinn) to address a specific goal: to
 - Optionally change some parameters, then run the notebook. This executes the code file _Optimize_WF_template.ipynb_ for every parameter set.
   + Each time this file is executed, it creates a [_task file_](https://github.com/alcrene/smttask), which is saved in a directory _tasklist_.
   + Task files are self-contained units of work. They can for example be created on one machine and executed on another.
-- From a console, navigate to the directory _workflows/tasklist_ and execute the following:  
+- From a console, navigate to the directory _workflows/tasklist_ and execute  
   `smttask run *`  
-  There are a variety of run options; type `smttask run --help` to see them. The `-n` option in particular allows to specify the number of employed CPU cores, and the `--pdb` option can be used to debug a script.
+  to execute all task files in the directory.
+  A variety of run options options are provide, which can be listed with `smttask run --help` to see them. The `-n` option in particular allows to specify the number of employed CPU cores, and the `--pdb` option can be used to debug a script.
 
-> **NOTE** The `smttask run` is meant as a convenient command for executing small batches of tasks. Although it provides basic multiprocessing capabilities, it is not intended to replace a full blown task scheduler like [snakemake](https://snakemake.readthedocs.io/en/stable/) or [doit](https://pydoit.org/). To use a scheduler, simply define a work flow which calls the created task file(s).
+::: {note}  
+The `smttask run` command is meant as a convenient command for executing small batches of tasks. Although it provides basic multiprocessing capabilities, it is not intended to replace a full blown task scheduler like [snakemake](https://snakemake.readthedocs.io/en/stable/) or [doit](https://pydoit.org/). To use a scheduler, create a scheduler task with executes the created task file(s) (e.g. with `smttask run`).  
+:::
 
 ### View fit results
 
@@ -119,15 +126,15 @@ Copy one of the model definition files, e.g. the [Wilson Cowan model](./sinnfull
 - All their input types are specified using [type hints](https://docs.python.org/3/library/typing.html).
 - Their output type(s) are also specified using type hints.
 
-In addition, the function must be decorated with one of the Task decorators [provided by _smttask_](https://github.com/alcrene/smttask/blob/master/docs/basics.rst#specifying-a-task).
+In addition, to convert a function into a Task, must be decorated with one of the Task decorators [provided by _Smttask_](https://github.com/alcrene/smttask/blob/master/docs/basics.rst#specifying-a-task).
 
-More detailed instructions can be found in the [tasks directory](./sinnfull/tasks/index.md). The [smttask documentation](https://github.com/alcrene/smttask/tree/master/docs) may also be useful.
+More detailed instructions can be found in the [tasks directory](./sinnfull/tasks/index.md). The [Smttask documentation](https://github.com/alcrene/smttask/tree/master/docs) may also be useful.
 
 To assemble multiple tasks into a workflow, create a new file in [_workflows_](./sinnfull/workflows/index). The [_Optimize_WF_template_](./sinnfull/workflows/Optimize_WF_template) file is a good starting point.
 
 ### Create a new optimizer
 
-The included optimizer defined under [optim](./sinnfull/optim/index) has extensive inline documentation explaining their algorithm and parameters. Use it as a template and adapt to your needs.
+The included optimizer defined under [optim](./sinnfull/optim/index) has extensive inline documentation explaining its algorithm and parameters. Use it as a template and adapt to your needs.
 
 Ensure your optimizer inherits from `sinnfull.Optimizer` and that the module it is defined in is imported by `sinnfull.optim.__init__.py`. This will ensure that it is added to the `sinnfull.optim.optimizers` dictionary.
 
@@ -172,7 +179,7 @@ jb toc . && grep -v __init__ _toc.yml | grep -v setup | grep -v "/_" | grep -v c
 
 ---
 
-# sinnfull
+# Sinnfull project
 
 {> Short project description <}
 
@@ -180,11 +187,11 @@ Based on the [Sinn-full](https://github.com/alcrene/sinnvoll) project template.
 
 ## Installation
 
-If you are on \*nix and your local installation follows our suggested [directory structure](https://jugit.fz-juelich.de/explainable-ai/general/-/blob/master/project_template/README.md), the following should suffice:
+If you are on \*nix, the following should suffice:
 
-1. clone this repository within your “Explainable_AI” folder.
-2. cd to the repository and execute
-3. `bash install.sh`
+1. clone this repository onto your machine.
+2. cd to the repository and execute  
+   `bash install.sh`
 4. `smttask init`
 
 If on Windows, perform steps 1. and 2., then set up a conda environment as you normally would. You can use the description of *install.sh* below as guidelines. Don't forgot to do step 4 once the package is installed.
