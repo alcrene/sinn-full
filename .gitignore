@@ -10,6 +10,8 @@ _build
 /data
 /index.html
   # Allow placing a symlink to the generated html book without bothering git
+/labnotes
+/reports
 /tests/scratch
 
 _merged_env.yaml
