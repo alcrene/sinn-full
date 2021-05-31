@@ -8,7 +8,6 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.9.1
 #   kernelspec:
 #     display_name: Python (sinn-full)
 #     language: python
@@ -168,8 +167,8 @@ if __name__ == "__main__":
 # Model representations are nicely formatted in a Jupyter notebook.
 # :::
 
-    # %%
-    model
+    # %% tags=["hide-output"]
+    display(model)
 
     # %%
     # Assert that the noise history (ξ) only gets exported once, and does so
@@ -201,9 +200,6 @@ if __name__ == "__main__":
     from IPython.display import display
     import holoviews as hv
     hv.extension('bokeh')
-
-    # %% tags=["hide-output"]
-    display(model)
 
     # %%
     # Initialize & integrate
