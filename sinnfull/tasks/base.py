@@ -266,10 +266,12 @@ def CreateModel(
         root_selector = model_selector["__root__"]
         submodel_selectors = {k:sel for k,sel in model_selector.items()
                               if not k.startswith("__")}
+        # submodel_classes is set below
         connect = model_selector["__connect__"]
     else:
         root_selector = model_selector
         submodel_selectors = None
+        submodel_classes = {}
         connect = None
 
     if submodel_selectors:
@@ -316,32 +318,32 @@ def CreateModel(
                              "match a unique model. The following matches were "
                              f"found:\n{match_strs}")
 
-    ## Identify the lower and upper model for each connection
-    connect_by_hist = {submodel: [] for submodel in submodel_selectors}
-    inverse_submodel_mapping = {cls.__name__: sub_nm
-                                for sub_nm,cls in submodel_classes.items()}
-        # Used to convert class names to attribute names in composite model
-    # If the same class is used for more than one attribute, don't allow using
-    # it, to avoid hard to track bugs.
-    cls_names = list(cls.__name__ for cls in submodel_classes.values())
-    for cls_nm in list(inverse_submodel_mapping.keys()):
-        if cls_names.count(cls_names) > 1:
-            del inverse_submodel_mapping[cls_nm]
-    # Now build the connection dictionary
-    for lowmodelhist, upmodelhist in connect.items():
-        low_model, low_hist = lowmodelhist.split('.')
-        up_model, up_hist = upmodelhist.split('.')
-        # Allow models in `connect` to be specified either by their class name,
-        # or the corresponding attribute of the composite model.
-        # Since the same model class can in theory be used multiple times, we
-        # give precedence to the attribute name, and use that for the
-        # connection dictionary.
-        if low_model not in connect_by_hist:
-            low_model = inverse_submodel_mapping[low_model]
-        if up_model not in connect_by_hist:
-            up_model = inverse_submodel_mapping[up_model]
-        connect_by_hist[up_model].append((low_model, low_hist, up_hist))
-    # TODO: It would be nice to ensure all models connections form a DAG
+        ## Identify the lower and upper model for each connection
+        connect_by_hist = {submodel: [] for submodel in submodel_selectors}
+        inverse_submodel_mapping = {cls.__name__: sub_nm
+                                    for sub_nm,cls in submodel_classes.items()}
+            # Used to convert class names to attribute names in composite model
+        # If the same class is used for more than one attribute, don't allow using
+        # it, to avoid hard to track bugs.
+        cls_names = list(cls.__name__ for cls in submodel_classes.values())
+        for cls_nm in list(inverse_submodel_mapping.keys()):
+            if cls_names.count(cls_names) > 1:
+                del inverse_submodel_mapping[cls_nm]
+        # Now build the connection dictionary
+        for lowmodelhist, upmodelhist in connect.items():
+            low_model, low_hist = lowmodelhist.split('.')
+            up_model, up_hist = upmodelhist.split('.')
+            # Allow models in `connect` to be specified either by their class name,
+            # or the corresponding attribute of the composite model.
+            # Since the same model class can in theory be used multiple times, we
+            # give precedence to the attribute name, and use that for the
+            # connection dictionary.
+            if low_model not in connect_by_hist:
+                low_model = inverse_submodel_mapping[low_model]
+            if up_model not in connect_by_hist:
+                up_model = inverse_submodel_mapping[up_model]
+            connect_by_hist[up_model].append((low_model, low_hist, up_hist))
+        # TODO: It would be nice to ensure all models connections form a DAG
 
     ## Task execution
     if rng_key is not None:
