@@ -25,6 +25,7 @@ if __name__ == "__main__":
 # %% tags=["remove-input"]
 import numpy as np
 import pymc3 as pm
+import theano_shim as shim
 from sinnfull.models.base import tag, Prior
 if __name__ == "__main__":
     from IPython.display import display
@@ -75,12 +76,12 @@ class OU_DalePrior(Prior):
         assert M % 2 == 0                   
             # Having odd M would imply having one extra positive W
         pm.Deterministic('M', shim.constant(M, dtype='int16'))
-        pm.Deterministic('Mtilde', shim.constant(tilde, dtype='int16'))
+        pm.Deterministic('Mtilde', shim.constant(Mtilde, dtype='int16'))
         # Create sign array, with half +1, half -1
         # Each column of A*Wtilde has the same sign (column = input latent process)
-        A = np.concatenate((np.ones(Mtilde//2, dtype='int16'),
+        Atilde = np.concatenate((np.ones(Mtilde//2, dtype='int16'),
                             -np.ones(Mtilde//2, dtype='int16')))
-        A = pm.Constant('A', A, shape=(Mtilde,), dtype=A.dtype)
+        Atilde = pm.Constant('Atilde', Atilde, shape=(Mtilde,), dtype=Atilde.dtype)
         μ = pm.Normal('μtilde', mu=0, sigma=2, shape=(Mtilde,))
         logτtilde = pm.Normal('logτtilde', mu=0, sigma=1, shape=(Mtilde,))
         _Wtilde_transp = pm.Dirichlet('_Wtilde_transp', a=np.ones((M,Mtilde)))

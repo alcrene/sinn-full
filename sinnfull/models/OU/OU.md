@@ -113,7 +113,7 @@ class OU_AR(Model):
         logτtilde: Shared[FloatX,1]
         logσtilde: Shared[FloatX,1]
         Wtilde   : Shared[FloatX,2]
-        Atilde   : Param[np.int16,2]
+        Atilde   : Param[np.int16,1]
         M        : Union[int,Array[np.integer,0]]
         Mtilde   : Union[int,Array[np.integer,0]]
         @property
