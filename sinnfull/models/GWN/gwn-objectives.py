@@ -56,5 +56,5 @@ def GWN_logp(model, k):
     Δt=model.dt; ξ=model.ξ
     Δt = getattr(Δt, 'magnitude', Δt)  # In case 'Δt' is a Pint or Quantities
     norm = -logσ + 0.5*shim.log(Δt)
-    gauss = - (ξ(k)-μ)**2 * shim.sqrt(Δt) / (2*σ)
+    gauss = - (ξ(k)-μ)**2 / (2*σ**2) * Δt
     return norm.sum() + gauss.sum()
