@@ -47,6 +47,7 @@ from warnings import warn
 from types import SimpleNamespace
 from typing import Union, Optional, Any, Callable, List, Tuple, Dict
 from collections import namedtuple
+from itertools import chain
 
 import numpy as np
 import xarray as xr
@@ -908,15 +909,40 @@ class AlternatedSGD(Optimizer):
 # %% [markdown]
 # #### Compilation – Preparatory step
 #
+# For compilation, we want the model histories to be in the following state:
+#
+# ![Diagram - History state for compilation](../../../dev-docs/history_compilation_state.svg)
+#
+# - $k_0$: time index corresponding to $t_0$.
+# - Boxes with solid edges: Computed time points.
+# - Boxes with dotted edges: Non-computed time points.
+# - Arrows: Computations (via update functions) through which the gradients on the cost must be backpropagated.
+#
+# Functions are compiled with a symbolic reference time point. When compiling a batch function, this is used as a symbolic starting point for `scan` (subsequent steps in the scan are represented by dotted arrows). During execution, the value of this start point is set to either $b_s^θ + K_r^θ$ (for parameter updates) or $b_s^η$ (for latent updates).
+#
+# We don't want to backpropagate through the update functions of the history or latent histories:
+# - Observed histories are provided by the data.
+# - Latent histories are being inferred, so they are provided by the current inferred latent history vector.
+# We achieve this by having the current time index (`hist.cur_tidx`) of these histories be one ahead of the intermediate histories. That way, when values for time point $k_0 + 1$ are retrieved, *sinn* will see that those time points are already computed and will simply index into the underlying data instead of evaluating the update function.
+
+# %% [markdown]
+# More specifically, the preparation step does the following:
+#
 # 1. Create placeholder shared variables for $K^θ_b$, $K^θ_r$, $K^η_b$ and $K^η_r$.
 #    - These are required because histories can only be indexed by shared variables (not pure symbolics). The placeholder variables are replaced by symbolic ones before compilation.
-# 1. Initialize the model.
+# 2. Fill the observed and latent histories with (possibly dummy) data. \
+#    (This is only to set their time index; the data are typically changed after compilation.)
+# 3. Lock all observed and latent histories.  
+#    (They are returned to their previous lock state in `cleanup_optimizer_compilation`
+# 4. Clear all unlocked data after $k_0$.
+# 5. If necessary, initialize the model with its `initialize` method.
 #    - This sets the initial conditions.
-# 2. Fill the history corresponding to observations with (possibly dummy) data. \
-#    (This data may be changed after compilation.)
-# 3. Integrate the model one time point.
-#    - The creation of the latent updates function needs at least one time point where all model histories are already calculated.
-# 4. Lock the histories corresponding to observations.
+# 6. If necessary, integrate the model one time point.
+#    - (It is a current requirement of the sinn accumulator that the $t_0$ point be computed.
+#       This could probably be changed to requiring only that the model be initialized.)
+# 7. Normalize the fit hyperparameters
+#    - Expand dicts of the form `hyperθ['latents']['λη']:value` into the form `hyperθ['latents']['λη'][hname]:value`
+#    - Convert all values under `hyperθ['params']` and `hyperθ['latents']` into shared variables.
 
     # %%
     @add_to('AlternatedSGD')
@@ -934,8 +960,13 @@ class AlternatedSGD(Optimizer):
         object.__setattr__(self, '_k_vars', SimpleNamespace())
 
         ## Ensure that all latent hists are synchronized with model cur_tidx ##
+        # TODO: This seems redundant with the newer sinn.Model, which asserts
+        #       that histories are synchronized on each call to `num_tidx`
         model_tidx = self.model.cur_tidx
         model_tnidx = self.model.tnidx
+        k = self.model.time.Index(self.model.num_tidx)
+            # Get the point that will correspond to cur tidx in the comp graph
+            # (typically cur_tidx, unless all hists are locked, then it is t0idx)
         for h in self.latent_hists.values():
             # FIXME?: Can't use != because it compares unequal for indices from different axes
             #         I think this is required because the != test is used to determine if an
@@ -949,35 +980,54 @@ class AlternatedSGD(Optimizer):
                     f"Model {self.model.name} curtidx: {model_tidx}")
 
         ## Ensure intermediate histories are alse synchronized ##
-        # Any history neither latent nor observed should only be required for
-        # intermediate calculations and therefore unlocked.
-        # It also should not be computed further than any latent hist, since
-        # it could prevent a latent hist from being computed.
+        # Any history which is neither latent nor observed should only be
+        # required for intermediate calculations and therefore unlocked.
+        # It also should not be computed further than any other intermediate hist, since
+        # it could prevent a it from being computed.
         # NB: self.model.nested_histories returns duplicates, if a history is
         #     part of more than one submodel. We use id(h) to ensure that
         #     a) we only keep one copy in intermediate_hists
         #     b) any copy is recognized as part of latent_or_observed_hists, if applicable
-        latent_or_observed_hists = set(id(h) for h in self.latent_hists.values()) \
-                                   | set(id(h) for h in self.observed_hists.values())
+        latent_or_observed_hists = {id(h): h for h in chain(self.latent_hists.values(),
+                                                            self.observed_hists.values())}
         intermediate_hists = {id(h): h for h in self.model.nested_histories.values()
                               if id(h) not in latent_or_observed_hists}
-        for h in intermediate_hists.values():
+        for h in chain(self.latent_hists.values(), intermediate_hists.values()):
             if h.locked:
                 raise RuntimeError(
                     f"AlternatedSGD: History {h.name} is locked, but not listed as observed.")
+        for h in intermediate_hists.values():
             if h.cur_tidx > model_tidx:
                 raise RuntimeError(
                     "AlternatedSGD: Intermediate history is not synchronized with the model.\n"
                     f"History {h.name} curtidx: {h.cur_tidx}\n"
                     f"Model {self.model.name} curtidx: {model_tidx}")
 
-        ## Mark the lock state of each observed history ##
-        lock_states = {h: h.locked for h in self.observed_hists.values()}
+        ## Mark the lock state of each latent or observed history ##
+        lock_states = {h: h.locked for h in latent_or_observed_hists.values()}
         self._compile_context.lock_states = lock_states
+        
+        ## Lock observed & latent histories for the duration of compilation ##
+        for h in latent_or_observed_hists.values():
+            if not h.locked:
+                h.lock(warn=False)
+                # Within this prep method we want to keep both observed and latent hists locked, but
+                # in the cleanup method they are returned to their original state
+                lock_states[h] = True
 
         ## Fill with dummy data ##
-        # Temporarily fill the observed histories with dummy data; we only need data for 2 time points
-        reset_curtidcs = {h: h.cur_tidx for h in self.observed_hists.values()}  # Keep the curtidx so we can invalidate the dummy data once we are done.
+        # Temporarily fill the observed and latent histories with dummy data; we only need data for 2 time points
+        # Filling the histories ensures that cost functions are compiled to simply
+        # retrieve values, not evaluate updates
+        # NB1: If there are unlocked state histories, the compilation anchor point will be set to their common tidx
+        #      (it is an error if they don't have the same). sinn.Model will raise an exception
+        #      if the locked histories are not computed at least up to that point, but we actually
+        #      need them computed one point further (an error will also be raised in the later
+        #      case, but it would be a confusing Theano error about arithmetic with objects being undefined).
+        # NB2: If there are *no* unlocked state histories, the compilation anchor point will be t0idx.
+        #      In this case the way we initialize the locked histories is fine,
+        #      since they are filled up to t0idx+1.
+        reset_curtidcs = {h: h.cur_tidx for h in latent_or_observed_hists.values()}  # Keep the curtidx so we can invalidate the dummy data once we are done.
         for h, kh in reset_curtidcs.copy().items():
             if kh < h.t0idx+2:
                 h.unlock()
@@ -1005,15 +1055,27 @@ class AlternatedSGD(Optimizer):
             self._compile_context.deleted_data = {}
             self._compile_context.deleted_tidx = None
         assert self.model.cur_tidx < self.model.tnidx
+        
+        ## Clear all unlocked data after k
+        self.model.clear(after=k)
 
+        # Check that locked histories are ahead by at least 1 time bin
+        if list(self.model.unlocked_statehists):
+            if self.model.get_min_tidx(latent_or_observed_hists.values()) < self.model.cur_tidx + 1:
+                locked_title   = "--- Current time indices (locked histories) ---\n"
+                unlocked_title = "--- Current time indices (unlocked histories) ---\n"
+                locked_tidcs = "  " + "\n  ".join(f"{h.name}: {h.cur_tidx}" for h in self.model.locked_histories)
+                unlocked_tidcs = "  " + "\n  ".join(f"{h.name}: {h.cur_tidx}" for h in self.model.unlocked_statehists)
+                raise RuntimeError(
+                    "Locked histories must be at least one step ahead of "
+                    "unlocked ones for the compilation of optimization "
+                    "functions to be correct.\n"
+                    f"{locked_title}{locked_tidcs}\n{unlocked_title}{unlocked_tidcs}")
+        
         ## Integrate one time point ##
         if self.model.cur_tidx < self.model.t0idx:
-            self.model.integrate(upto=0)  # FIXME: Shouldn't this be upto=model.t0idx ?
-
-        ## Lock observed histories ##
-        for h in self.observed_hists.values():
-            if not h.locked:
-                h.lock(warn=False)
+            self.model.initialize()
+            self.model.integrate(upto=self.model.t0idx)
 
         ## Normalize fit hyperparameters ##
         hyperθ = self.fit_hyperparams
@@ -1046,7 +1108,7 @@ class AlternatedSGD(Optimizer):
         # Do this after integration, filling & locking, to ensure histories are synchronized
         model = self.model
         modelstr = f"({type(model).__name__})"
-        self._k_vars.k = model.time.Index(model.num_tidx)  # -> curtidx_var
+        self._k_vars.k = k  # -> curtidx_var
         self._k_vars.Kshared = shim.shared(  # -> total length
             model.time.index_nptype(1), name=f"K ({modelstr})")  # Value is updated in draw_data_segment
         self._k_vars.K = model.time.Index.Delta(self._k_vars.Kshared)
