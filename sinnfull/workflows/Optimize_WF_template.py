@@ -68,7 +68,8 @@ import sinnfull.models
 import sinnfull.optim
 from sinnfull import ureg
 from sinnfull.parameters import ParameterSet
-from sinnfull.models import TimeAxis, models, ObjectiveFunction
+from sinnfull.models import (TimeAxis, models, ObjectiveFunction,
+                         get_objectives, get_prior, get_model_class)
 #from sinnfull.data.synthetic import SyntheticDataAccessor
 #from sinnfull.sampling import sample_baseline_segment
 
@@ -212,9 +213,6 @@ if __name__ != "__main__":
         for k, v in script_args[__name__].items():
             if k in g:
                 g[k] = v
-
-# %%
-from sinnfull.models import get_objectives, get_prior, get_model_class
 
 # %% [markdown]
 # Retrieve the model.
@@ -775,7 +773,7 @@ if True and exec_environment == "notebook":
 
 # %%
 if exec_environment == "notebook":
-    result = optimize.run(record=True, recompute=True)
+    result = optimize.run(record=False, recompute=True)
 
 # %% [markdown]
 # ---
