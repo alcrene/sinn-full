@@ -1047,6 +1047,9 @@ class AlternatedSGD(Optimizer):
         model = self.model
         modelstr = f"({type(model).__name__})"
         self._k_vars.k = model.time.Index(model.num_tidx)  # -> curtidx_var
+        self._k_vars.Kshared = shim.shared(  # -> total length
+            model.time.index_nptype(1), name=f"K ({modelstr})")  # Value is updated in draw_data_segment
+        self._k_vars.K = model.time.Index.Delta(self._k_vars.Kshared)
         self._k_vars.Kθb = model.time.index_interval(self.fit_hyperparams['Tθb']*model.time.unit)
         self._k_vars.Kθr = model.time.index_interval(self.fit_hyperparams['Tθr']*model.time.unit)
         self._k_vars.Kθb = model.time.Index.Delta(shim.shared(self.Kθb.plain, name=f"Kθb ({modelstr})"))  # -> Kθb_symb
