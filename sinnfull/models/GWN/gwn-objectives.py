@@ -16,10 +16,7 @@
 # %% [markdown]
 # # GWN objective functions
 
-# %%
-import numpy as np
-import theano_shim as shim
-
+# %% tags=["remove-cell"]
 from sinnfull.models.base import ObjectiveFunction, tag
 from sinnfull.typing_ import IndexableNamespace
 
@@ -58,3 +55,8 @@ def GWN_logp(model, k):
     norm = -logσ + 0.5*shim.log(Δt)
     gauss = - (ξ(k)-μ)**2 / (2*σ**2) * Δt
     return norm.sum() + gauss.sum()
+
+# %% [markdown]
+# > When the optimizer evaluates the objective, it is not known in general whether `ubar` or `u` are given or need to be computed. Hence we use round brackets instead of square brackets for indexing.
+
+# %%

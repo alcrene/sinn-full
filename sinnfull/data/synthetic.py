@@ -249,7 +249,7 @@ class SyntheticDataAccessor(BaseAccessor):
         model = self.model
         curtidcs = {h: h.cur_tidx for h in model.history_set}
         for h in model.history_set:
-            if not h._num_tidx is h._sym_tidx:
+            if h._taps:
                 warn("Exporting SyntheticDataAccessor while there are pending symbolic "
                      "updates is undefined.")
             h._num_tidx.set_value(h.t0idx-1)

@@ -47,7 +47,7 @@
 
 # %%
 if __name__ == "__main__":
-    from sinnfull.optim.optimizers.alternated import *
+    from sinnfull.optim.optimizers.alternated_sgd import *
 
     import itertools
     from sinnfull import ureg
@@ -85,7 +85,7 @@ if __name__ == "__main__":
     input_model = OUInput(params=θ_in, time=time, rng=simrng)
 
     ## Apply SGD mask to parameters to select which will be optimized ##
-    Θ = prior.
+    #Θ = prior.
 
     ## Instantiate data accessor (Not actually used in this example) ##
     #data = DataAccessor(sumatra_project="..", datadir="external/ExampleSzrData")

@@ -23,6 +23,10 @@
     - file: sinnfull/models/GWN/GWN
       sections:
       - file: sinnfull/models/GWN/gwn-priors
+      - file: sinnfull/models/GWN/gwn-objectives
+    - file: sinnfull/models/GaussObs/GaussObs
+      sections:
+      - file: sinnfull/models/gaussobs-priors
     - file: sinnfull/models/composite_models/composite_models.py
     - file: sinnfull/models/tagcolls
 

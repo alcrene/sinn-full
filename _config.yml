@@ -11,12 +11,12 @@ copyright                   : "2021"
 logo                        : ""
 exclude_patterns            : [_build, Thumbs.db, .DS_Store, "**.ipynb_checkpoints",
                                ".*", src, lib, "*.egg-info", "*.mypy_cache",
-                               "*.smt", data, tests,
-                               "Optimize_WF_template"]
+                               "*.smt", data, labnotes, reports,
+                               "Optimize_WF_template",]
     # NB: 'data' only excludes the top-level directory.
     #     To exclude all subdirs named 'data', would would do "**data"
     #     (which we don't want, since there is a 'data' subpackage)
-only_build_toc_files        : false
+only_build_toc_files        : true
 
 #######################################################################################
 # Execution settings

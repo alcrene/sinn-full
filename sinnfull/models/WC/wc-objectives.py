@@ -2,11 +2,12 @@
 # ---
 # jupyter:
 #   jupytext:
+#     formats: py:percent
+#     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.9.1
 #   kernelspec:
 #     display_name: Python (sinn-full)
 #     language: python
@@ -78,5 +79,8 @@ def WC_se(model, k, s=1):
 @ObjectiveFunction(tags={'lorentz', 'cauchy', 'breit-wigner', 'forward'})
 def WC_lorentz(model, k, s=1):
     "Log Lorentz objective"
-    u_predict = model.u_upd(model, k); u_k = model.u[k]
+    u_predict = model.u_upd(model, k); u_k = model.u(k)
     return -shim.log(1+((u_predict-u_k)/s)**2).sum()
+
+# %% [markdown]
+# > When the optimizer evaluates the objective, it is not known in general whether `ubar` or `u` are given or need to be computed. Hence we use round brackets instead of square brackets for indexing.

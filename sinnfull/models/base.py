@@ -566,12 +566,12 @@ class Prior(PyMC_Model):
         """
         self.no_observed_RVs()
         if isinstance(obj, (list,tuple,set,frozenset)):
-            return type(obj)(self.sub_optim_vars(θ) for θ in obj)
+            return type(obj)(self.sub_optim_vars(θ, optim_vars) for θ in obj)
         elif isinstance(obj, dict):
-            return {k: self.sub_optim_vars(θ) for k,θ in obj.items()}
+            return {k: self.sub_optim_vars(θ, optim_vars) for k,θ in obj.items()}
         elif isinstance(obj, (ModelParams,IndexableNamespace)):
             return IndexableNamespace(
-                **{θname: self.sub_optim_vars(θ) for θname, θ in obj})
+                **{θname: self.sub_optim_vars(θ, optim_vars) for θname, θ in obj})
         elif isinstance(obj, shim.config.GraphTypes):
             symb_inputs = {i.name: i for i in shim.graph.symbolic_inputs(obj)
                            if hasattr(i, 'name')}

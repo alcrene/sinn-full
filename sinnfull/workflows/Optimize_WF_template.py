@@ -116,11 +116,13 @@ sampler_rngkey = 5
 # or a dictionary with entries matching submodels (+ __root__ and __connect__)
 # If there are submodels, the __connect__ entry indicates how their histories
 # relate. It should be a list of strings.
-model_selector      = {'__root__'   : {'ObservedDynamics'},
-                       'input'      : {'GaussianWhiteNoise'},
-                       'dynamics'   : {'WilsonCowan'},
-                       '__connect__': ['GaussianWhiteNoise.ξ -> WilsonCowan.I']}
-observed_hists=['dynamics.u']  # Use dotted names to denote histories in submodels
+model_selector      = {'__root__'    : {'DeterministicDynamics'},
+                       'input'       : {'GaussianWhiteNoise'},
+                       'dynamics'    : {'WilsonCowan'},
+                       'observations': {'GaussObs'},
+                       '__connect__' : ['GaussianWhiteNoise.ξ -> WilsonCowan.I',
+                                        'WilsonCowan.u -> GaussObs.u']}
+observed_hists=['observations.ubar']  # Use dotted names to denote histories in submodels
 latent_hists  =['input.ξ']
 
 from sinnfull.optim import paramsets as optim_paramsets
@@ -132,8 +134,8 @@ default_hyperparams = optim_paramsets['WC'].default   # Defined in [projectdir]/
 # or lists (to indicate multiple objectives).
 # All objectives are ultimately summed together
 # (Future: we may add notation for coefficients multiplying objectives)
-objective_selectors = {'input': {'GaussianWhiteNoise'},
-                       'dynamics': {'WilsonCowan', 'se'}}
+objective_selectors = {'input': {'GaussianWhiteNoise', 'log L'},
+                       'observations': {'GaussObs', 'log L'}}
 params_objective  = None  # None = use default_objective
 latents_objective = None  # None = use default_objective
 prior_spec = ParameterSet(
@@ -141,18 +143,24 @@ prior_spec = ParameterSet(
                'kwds': dict(mu_mean=[-0.25, -0.5],
                             logsigma_mean=[-1., -1.],
                             M=2)},
-     'dynamics': {'selector': {'WC', 'rich'}, 'kwds': dict(M=2)}
+     'dynamics': {'selector': {'WC', 'rich'}, 'kwds': dict(M=2)},
+     'observations': {'selector': {'GaussObs', 'independent'},
+                      'kwds': dict(logvar_mean=1.,
+                                   logvar_std=1.,
+                                   C=2,
+                                   M=2)}
     })
     # NB: Different priors may have different parameters
 
 # Draw data parameters from tighter distributions than the priors
-# This reflects the practice if making the priors broader to avoid unduly
+# This reflects the practice of making the priors broader to avoid unduly
 # influencing the fit (Gaussian priors tend to start shaping the posterier
 # even for parameter values only moderately away from their mean).
 synth_param_spec = prior_spec.copy()  # Requires sinnfull.ParameterSet
 synth_param_spec.update({'input.kwds.mu_std': 1.,         # Tip: Use dotted notation to avoid
                          'input.kwds.logsigma_std': 0.5,  # quashing other params
-                         'dynamics.kwds.scale': 0.25})
+                         'dynamics.kwds.scale': 0.25,
+                         'observations.kwds.logvar_std': 0.25})
     
 exec_environment = "module"   # Changed to 'papermill' by sinnfull.utils.generate_task_from_nb
 
@@ -770,6 +778,16 @@ if True and exec_environment == "notebook":
 # %% [markdown]
 # The call to `run()` will recurse through the workflow tree, executing all required tasks. Since `OptimizeModel` is a `RecordedTask`, its result is saved to disk so that it will not need to be run again in the future if called with the same parameters.
 # (To force a rerun, e.g. if the model code changed, one can execute `optimize.run(recompute=True)`.)
+
+# %% [markdown] tags=["remove-cell"]
+# Debugging options:
+# ```python
+# import theano
+# theano.config.optimizer = 'fast_compile'
+# theano.config.NanGuardMode__action = 'raise'
+# import mackelab_toolbox.optimizers
+# mackelab_toolbox.optimizers.debug_flags['print grads'] = True
+# ```
 
 # %%
 if exec_environment == "notebook":

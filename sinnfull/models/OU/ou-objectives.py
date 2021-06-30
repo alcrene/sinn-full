@@ -160,3 +160,6 @@ def OUFN_logp_backward(model, k):
 
 # %%
 OUFN_logp_smoother = (OUFN_logp_forward + OUFN_logp_backward) / 2
+
+# %% [markdown]
+# > When the optimizer evaluates the objective, it is not known in general whether `ubar` or `u` are given or need to be computed. Hence we use round brackets instead of square brackets for indexing.

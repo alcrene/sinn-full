@@ -46,7 +46,7 @@ sinnfull.diagnostics.set(__name__ == "__main__")
 from warnings import warn
 from types import SimpleNamespace
 from typing import Union, Optional, Any, Callable, List, Tuple, Dict
-from collections import namedtuple
+from collections import namedtuple, OrderedDict
 from itertools import chain
 
 import numpy as np
@@ -735,22 +735,24 @@ class AlternatedSGD(Optimizer):
 
         #### Do parameter updates ####
         if update_params and not self.status & OptimizerStatus.ParamsConverged:
-            Kθb=self.Kθb.eval(); Kθr=self.Kθr.eval();
+            Kθb=self.Kθb.plain.eval(); Kθr=self.Kθr.plain.eval();
             Nθb=self.Nθb;
             bθ = sample_batch_starts(K, Kθb+Kθr, Nθb, rng=rng)
             bθ.sort()
             for bθs in bθ:
                 # FIXME: include Kθr in BPTT for later values
-                self.model.integrate(upto=bθs+Kθr+Kθb-1)  # -1 because 'upto' is inclusive bound
+                # NOTE: Instead of histories='all', we could include the state updates
+                #       when we update params (see compile_parameter_optimizer)
+                self.model.integrate(upto=bθs+Kθr+Kθb-1, histories='all')  # -1 because 'upto' is inclusive bound
                 self.update_θ(bθs, Kθb, Kθr)
                 diagnostic_hooks and self.record_diagnostics(bθs, 'θ', force=False)
 
         #### Do latent updates ####
         if update_latents and hasattr(self, 'update_η') and not self.status & OptimizerStatus.LatentsConverged:
             # Second condition because if there are no latent hists, we don't compile update_η
-            Kηb=self.Kηb.eval(); Kηr=self.Kηr.eval();
+            Kηb=self.Kηb.plain.eval(); Kηr=self.Kηr.plain.eval();
             Nηb=self.Nηb;
-            self.model.integrate(upto='end')
+            self.model.integrate(upto=self.current_segment_range[1], histories='all')  # range is inclusive
             if self.batched_latents:
                 bη = sample_batch_starts(K, Kηb+Kηr, Nηb, rng=rng)
                 bη.sort()
@@ -1057,7 +1059,7 @@ class AlternatedSGD(Optimizer):
         assert self.model.cur_tidx < self.model.tnidx
         
         ## Clear all unlocked data after k
-        self.model.clear(after=k)
+        self.model.clear(after=shim.eval(k.plain))  # eval(k) b/c clear requires a numeric time index
 
         # Check that locked histories are ahead by at least 1 time bin
         if list(self.model.unlocked_statehists):
@@ -1075,7 +1077,7 @@ class AlternatedSGD(Optimizer):
         ## Integrate one time point ##
         if self.model.cur_tidx < self.model.t0idx:
             self.model.initialize()
-            self.model.integrate(upto=self.model.t0idx)
+            self.model.integrate(upto=self.model.t0idx, histories='all')
 
         ## Normalize fit hyperparameters ##
         hyperθ = self.fit_hyperparams
@@ -1116,14 +1118,14 @@ class AlternatedSGD(Optimizer):
         self._k_vars.Kθr = model.time.index_interval(self.fit_hyperparams['Tθr']*model.time.unit)
         self._k_vars.Kθb = model.time.Index.Delta(shim.shared(self.Kθb.plain, name=f"Kθb ({modelstr})"))  # -> Kθb_symb
         self._k_vars.Kθr = model.time.Index.Delta(shim.shared(self.Kθr.plain, name=f"Kθr ({modelstr})"))  # -> Kθr_symb
-        self._k_vars.Kθb_symb = shim.tensor(self.Kθb.plain)  # Symbolic variable associated to a shared variable
-        self._k_vars.Kθr_symb = shim.tensor(self.Kθr.plain)
+        self._k_vars.Kθb_symb = shim.tensor(Kθb.plain, name="Kθb")  # Symbolic variable associated to a shared variable
+        self._k_vars.Kθr_symb = shim.tensor(Kθr.plain, name="Kθr")
         self._k_vars.Kηb = model.time.index_interval(self.fit_hyperparams['Tηb']*model.time.unit)
         self._k_vars.Kηr = model.time.index_interval(self.fit_hyperparams['Tηr']*model.time.unit)
         self._k_vars.Kηb = model.time.Index.Delta(shim.shared(self.Kηb.plain, name=f"Kηb ({modelstr})"))  # -> Kηb_symb
         self._k_vars.Kηr = model.time.Index.Delta(shim.shared(self.Kηr.plain, name=f"Kηr ({modelstr})"))  # -> Kηr_symb
-        self._k_vars.Kηb_symb = shim.tensor(self.Kηb.plain)
-        self._k_vars.Kηr_symb = shim.tensor(self.Kηr.plain)
+        self._k_vars.Kηb_symb = shim.tensor(Kηb.plain, name="Kηb")
+        self._k_vars.Kηr_symb = shim.tensor(Kηr.plain, name="Kηr")
 
     @add_property_to('AlternatedSGD')
     def k(self):
@@ -1172,7 +1174,7 @@ class AlternatedSGD(Optimizer):
         if del_tidx is not None:
             assert self.model.cur_tidx < del_tidx
             for h, data in self._compile_context.deleted_data.items():
-                assert h._sym_tidx is h._num_tidx
+                assert not h._taps
                 with unlocked_hists(h):
                     h[del_tidx:] = data
             assert self.model.cur_tidx == del_tidx
@@ -1233,15 +1235,23 @@ class AlternatedSGD(Optimizer):
 
         Θ = {optimθ for modelθ, optimθ in self.Θ}  # Used for sanity checks
         #### Evaluate logp(θ) ####
+        i = self.model.dynamics.I.cur_tidx
         batch_logp, state_upds = self.logp_params(self.model.curtidx_var,
                                                   Kθb_symb)
+        if state_upds != shim.get_updates():
+            raise AssertionError("State updates differ from shim updates.")
         # Convert from model vars to optim vars
         batch_logp = self.prior_params.sub_optim_vars(batch_logp, self.Θ)
         state_upds = self.prior_params.sub_optim_vars(state_upds, self.Θ)
             # Keys to state_upds are histories, so only values may need to be transformed
+        # Reset global shim updates with the substituted vars
+        shim.reset_updates()
+        shim.add_updates(state_upds)
         # Add prior. The factor λ scales the prior proportionally to the size of a batch
-        λ = self._k_vars.Kθb_symb / K
+        λ = Kθb_symb / self.K.plain
         prior_logp = self.prior_params.sub_optim_vars(self.prior_params.logpt, self.Θ)
+        # print_subs = {θ: shim.print(θ, k) for k, θ in self.Θ}          # DEBUG
+        # prior_logp = shim.graph.clone(prior_logp, replace=print_subs)  # DEBUG
         msg = ("The {} does not depend on all of the optimization parameters. "
                "This is almost certainly an error.\nMissing: {}")
         batch_inputs = set(shim.graph.symbolic_inputs(batch_logp))
@@ -1255,8 +1265,6 @@ class AlternatedSGD(Optimizer):
         batch_logp = batch_logp + λ*prior_logp
         #if self.logp_params_regularizer is not None:
         #    batch_logp += self.logp_params_regularizer(self.model)
-        if state_upds != shim.get_updates():
-            raise AssertionError("State updates differ from shim updates.")
         # There should be no latents in the updates => they need to be integrated first
         latent_data = [h._num_data for h in self.latent_hists.values()]
         if any(v in latent_data for v in state_upds):
@@ -1274,24 +1282,28 @@ class AlternatedSGD(Optimizer):
         #        f"{set(self.params) - set(symb_inputs)}.")
 
         #### Compute parameter updates with Adam ####
-        if self.param_optimizer is not None:
-            param_upds = self.param_optimizer(
-                -batch_logp, params=[θ for _, θ in self.Θ], **self.fit_hyperparams['params'])
-        else:
-            param_upds = self.default_param_optimizer(
-                -batch_logp, params=[θ for _, θ in self.Θ], **self.fit_hyperparams['params'])
+        param_optimizer = self.param_optimizer
+        if param_optimizer is None:
+            param_optimizer = self.default_param_optimizer
+        param_upds = param_optimizer(
+            -batch_logp, params=[θ for _, θ in self.Θ], **self.fit_hyperparams['params'])
+        assert not set(state_upds) & set(param_upds), "Computing the gradient of `batch_logp` should not trigger new variable updates"
         if state_upds != shim.get_updates():
-            new_upds  = [v for v in shim.get_updates() if v not in state_upds]
-            chgd_upds = [v for v in state_upds if state_upds[v] != shim.get_updates()[v]]
-            raise RuntimeError(f"The param optimizer `{self.param_optimizer.__qualname__}` "
+            shim_upds = shim.get_updates()
+            new_upds  = [v for v in shim_upds if v not in state_upds]
+            chgd_upds = [v for v in state_upds if state_upds[v] != shim_upds.get(v, None)]
+            raise RuntimeError(f"The param optimizer `{param_optimizer.__qualname__}` "
                                "should return an update dictionary, but must "
                                "not modify `shim`'s global update dictionary.\n"
                                f"Added or modified variables: {new_upds+chgd_upds}.")
 
         #### Compile logp function ####
+        # from theano.compile.nanguardmode import NanGuardMode         # DEBUG
         logp_f = shim.graph.compile(
             inputs =(self.model.curtidx_var, Kθb_symb),
-            outputs=batch_logp
+            outputs=batch_logp,
+            name="logp"
+            # mode=NanGuardMode(nan_is_error=True, inf_is_error=True)  # DEBUG
         )
         k0 = self.model.t0idx
         def logp(k0=k0, K=K):
@@ -1310,11 +1322,14 @@ class AlternatedSGD(Optimizer):
         object.__setattr__(self, 'logp', logp)
 
         #### Compile θ update function ####
+        # from theano.compile.nanguardmode import NanGuardMode         # DEBUG
         update_θ = shim.graph.compile(
             inputs =(self.model.curtidx_var, Kθb_symb, Kθr_symb),
             outputs=[],
-            updates=param_upds,
-            on_unused_input='ignore'
+            updates={**state_upds, **param_upds},  # We have asserted above that these dicts are disjoint
+            on_unused_input='ignore',
+            name="Θ updates",
+            # mode=NanGuardMode(nan_is_error=True, inf_is_error=True)  # DEBUG
         )
         object.__setattr__(self, 'update_θ', update_θ)
 
@@ -1370,9 +1385,11 @@ class AlternatedSGD(Optimizer):
         Kηb_symb = self.Kηb_symb
         Kηr_symb = self.Kηr_symb
 
-        #### Unlock latent histories ####
-        for h in self.latent_hists.values():
-            h.unlock()
+        # #### Unlock latent histories ####
+        # for h in self.latent_hists.values():
+        #     h.unlock()
+        # Latent histories should have been locked by prepare_optimizer_compilation
+        assert all(h.locked for h in self.latent_hists.values())
 
         #### Evaluate η (latent) updates ####
         if self.batched_latents:

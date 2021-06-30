@@ -37,8 +37,7 @@ import numpy as np
 import theano_shim as shim
 from mackelab_toolbox.typing import FloatX, Shared, Array, RNGenerator
 from sinn.models import ModelParams, updatefunction, initializer
-from sinn.histories import TimeAxis, Series, AutoHist
-from sinn.utils import unlocked_hists
+from sinn.histories import TimeAxis, Series
 
 from sinnfull.utils import add_to, add_property_to
 from sinnfull.rng import draw_model_sample

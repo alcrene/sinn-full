@@ -3,15 +3,15 @@
 # jupyter:
 #   jupytext:
 #     formats: py:percent
+#     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.9.1
 #   kernelspec:
-#     display_name: Python (sinn-full)
+#     display_name: Python (sinnfull)
 #     language: python
-#     name: sinn-full
+#     name: sinnfull
 # ---
 
 # %% [markdown]
@@ -36,7 +36,8 @@ if __name__ == "__main__":
 
 
 # %% [markdown]
-# :::{admonition} Definining priors
+# ::::{admonition} Definining priors  
+# :class: dropdown
 #
 # Priors are defined by defining a [_custom PyMC3 model_](http://docs.pymc.io/api/model.html#pymc3.model.Model). Effectively this means that
 #
@@ -55,13 +56,13 @@ if __name__ == "__main__":
 #         a = pm.Normal('a')
 #         ...
 # ```  
-# :::
-
-# %% [markdown]
+#
 # :::{tip}
 # The `Constant` distribution, although provided by PyMC3, was at some point [deprecated](https://github.com/pymc-devs/pymc3/pull/2452); it's not clear from the docs if it still is, but in any case it only accepts [integer values](https://github.com/pymc-devs/pymc3/issues/2451).  
 # The better alternative is thus to use `Deterministic`, which has the benefit of not showing up as a variable to optimize.  
 # :::
+#
+# ::::
 
 # %% [markdown]
 # ## Default prior

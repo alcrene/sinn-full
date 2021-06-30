@@ -2,15 +2,15 @@
 jupytext:
   encoding: '# -*- coding: utf-8 -*-'
   formats: py:percent,md:myst
+  notebook_metadata_filter: -jupytext.text_representation.jupytext_version
   text_representation:
     extension: .md
     format_name: myst
     format_version: 0.12
-    jupytext_version: 1.9.1
 kernelspec:
-  display_name: Python (sinn-full)
+  display_name: Python (sinnfull)
   language: python
-  name: sinn-full
+  name: sinnfull
 ---
 
 # Gaussian white noise
@@ -36,7 +36,7 @@ from __future__ import annotations
 
 import sinnfull
 if __name__ == "__main__":
-    sinnfull.setup('numpy')
+    sinnfull.setup('theano')
 ```
 
 ```{code-cell} ipython3
@@ -59,7 +59,7 @@ import mackelab_toolbox.iotools
 from sinn.histories import History
 from sinn.models import PendingUpdateFunction
 
-from sinn.models import ModelParams, Model, updatefunction
+from sinn.models import ModelParams, updatefunction
 from sinn.histories import TimeAxis, Series, HistoryUpdateFunction
 from sinn.utils.pydantic import initializer, add_exclude_mask
 
@@ -120,7 +120,7 @@ which is the definition we use in the implementation.
 ```{code-cell} ipython3
 :tags: [hide-input]
 
-class GaussianWhiteNoise(BaseModel):
+class GaussianWhiteNoise(Model):
     # Currently we just inherit from plain BaseModel
     # Eventually we may define NoiseSource with common functionality
     time: TimeAxis
@@ -132,8 +132,12 @@ class GaussianWhiteNoise(BaseModel):
         @validator('M')
         def only_plain_ints(cls, v):  # Theano RNG only accepts plain
             return int(v)             # or Theano int, not NumPy array
-    params: GaussianWhiteNoise.Parameters
+    #params: GaussianWhiteNoise.Parameters
+    params: Parameters
 
+    #class State:
+    #    pass  # No state variables
+        
     ξ  : Series=None
     rng: AnyRNG=None
 
@@ -156,19 +160,19 @@ class GaussianWhiteNoise(BaseModel):
 
     ## Stuff that could be in NoiseSource class
     
-    class Config:
-        # Allow assigning other attributes during initialization.
-        # extra = 'allow'
-        keep_untouched = (ModelParams, PendingUpdateFunction)
-        json_encoders = {**mtb_encoders,
-                         **History.Config.json_encoders}
+    #class Config:
+    #    # Allow assigning other attributes during initialization.
+    #    # extra = 'allow'
+    #    keep_untouched = (ModelParams, PendingUpdateFunction)
+    #    json_encoders = {**mtb_encoders,
+    #                     **History.Config.json_encoders}
 
-    # These would normally be inferred by the Model metaclass
-    _hist_identifiers  : List[str]=PrivateAttr(['ξ'])
-    _kernel_identifiers: List[str]=PrivateAttr([])
-    _model_identifiers : List[str]=PrivateAttr([])
-    _pending_update_functions: List[HistoryUpdateFunction] = \
-        PrivateAttr([ξ_upd])
+    ## These would normally be inferred by the Model metaclass
+    #_hist_identifiers  : List[str]=PrivateAttr(['ξ'])
+    #_kernel_identifiers: List[str]=PrivateAttr([])
+    #_model_identifiers : List[str]=PrivateAttr([])
+    #_pending_update_functions: List[HistoryUpdateFunction] = \
+    #    PrivateAttr([ξ_upd])
 
     def initialize(self, initializer=None):
         return
@@ -178,11 +182,8 @@ class GaussianWhiteNoise(BaseModel):
 As the prototype for *noise sources*, all functionality is currently implemented in `GaussianWhiteNoise`.
 :::
 
-```{code-cell} ipython3
----
-jupyter:
-  source_hidden: true
----
++++
+
     @add_to('GaussianWhiteNoise')
     def __init__(self, initializer=None, ModelClass=None, **kwargs):
         # Recognize if being deserialized, as we do in __new__
@@ -356,14 +357,9 @@ jupyter:
                 ))
         self._pending_update_functions = {}
         # >>> Different from Model: no compilation attributes
-```
 
-```{code-cell} ipython3
----
-jupyter:
-  source_hidden: true
-tags: [hide-input]
----
++++ {"tags": ["hide-input"]}
+
     @add_to('GaussianWhiteNoise')
     def integrate(self, upto='end'):
         # TODO: Do this in one vectorized operation.
@@ -905,7 +901,8 @@ tags: [hide-input]
             except KeyError:
                 stats[key[0]] = {key[1]: statval}
         return stats
-```
+
++++
 
 ## Stationary state
 
@@ -1005,7 +1002,7 @@ if __name__ == "__main__":
 ```
 
 ```{code-cell} ipython3
-    noise.integrate(upto='end')
+    noise.integrate(upto='end', histories='all')
 ```
 
 ```{code-cell} ipython3
@@ -1030,7 +1027,7 @@ We can use this to test the correctness of our implementation: simulate the `Gau
     T = (noise.tn-noise.t0)  # time we integrate for
     for i in tqdm(range(N_sims)):
         noise.clear()
-        noise.integrate('end')
+        noise.integrate('end', histories='all')
         int_ξ.append( noise.ξ.data.sum(axis=0)*noise.dt )
 ```
 
@@ -1046,16 +1043,19 @@ We can use this to test the correctness of our implementation: simulate the `Gau
                                  label="Monte Carlo"
                                 )
         ξarr = np.linspace(edges[0], edges[-1], 100)
-        pdf_vals = stats.norm(loc=noise.μ*T.magnitude,
-                              scale=np.exp(noise.logσ)*np.sqrt(T.magnitude)
+        pdf_vals = stats.norm(loc=shim.eval(noise.μ)[i]*T.magnitude,
+                              scale=np.exp(shim.eval(noise.logσ)[i])*np.sqrt(T.magnitude)
                              ).pdf(ξarr)
         pdf = hv.Curve(zip(ξarr, pdf_vals),
                        kdims=[f"∫ξ{i}"], vdims=[f"p(∫ξ{i})"],
                        label="Theory")
         panels.append(histogram * pdf.opts(color='orange'))
+    for panel in panels[:-1]:
+        panel.opts(show_legend=False, width=300)
+    panels[-1].opts(legend_position='right', width=400)
     hv.Layout(panels)
 ```
 
 ```{code-cell} ipython3
-
+    
 ```
