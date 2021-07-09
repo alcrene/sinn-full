@@ -584,6 +584,18 @@ class AlternatedSGD(Optimizer):
         - Will model histories
         - Will update `_current_segment_key`
 
+        **Treatment of initial conditions**
+        The observed history with the largest left padding determines the
+        number of time bins reserved to set initial conditions. For example,
+        assume that a segment *data* is drawn with *t0 = 1.0* and *dt = 0.01*,
+        and that the model has two observed histories, *h1* with *pad_left = 0*
+        and *h2* with *pad_left = 3*. Then the first three time bins are
+        reserved to set initial conditions:
+
+        - The first three time bins in *data* associated to *h1* are discarded.
+        - All time bins in *data* associated to *h2* are used.
+        - The *t0* value of the model is set to *1.03*.
+
         Returns
         -------
         segmentkey: tuple
@@ -934,7 +946,7 @@ class AlternatedSGD(Optimizer):
 #    - These are required because histories can only be indexed by shared variables (not pure symbolics). The placeholder variables are replaced by symbolic ones before compilation.
 # 2. Fill the observed and latent histories with (possibly dummy) data. \
 #    (This is only to set their time index; the data are typically changed after compilation.)
-# 3. Lock all observed and latent histories.  
+# 3. Lock all observed and latent histories.
 #    (They are returned to their previous lock state in `cleanup_optimizer_compilation`
 # 4. Clear all unlocked data after $k_0$.
 # 5. If necessary, initialize the model with its `initialize` method.
@@ -1008,7 +1020,7 @@ class AlternatedSGD(Optimizer):
         ## Mark the lock state of each latent or observed history ##
         lock_states = {h: h.locked for h in latent_or_observed_hists.values()}
         self._compile_context.lock_states = lock_states
-        
+
         ## Lock observed & latent histories for the duration of compilation ##
         for h in latent_or_observed_hists.values():
             if not h.locked:
@@ -1057,7 +1069,7 @@ class AlternatedSGD(Optimizer):
             self._compile_context.deleted_data = {}
             self._compile_context.deleted_tidx = None
         assert self.model.cur_tidx < self.model.tnidx
-        
+
         ## Clear all unlocked data after k
         self.model.clear(after=shim.eval(k.plain))  # eval(k) b/c clear requires a numeric time index
 
@@ -1073,7 +1085,7 @@ class AlternatedSGD(Optimizer):
                     "unlocked ones for the compilation of optimization "
                     "functions to be correct.\n"
                     f"{locked_title}{locked_tidcs}\n{unlocked_title}{unlocked_tidcs}")
-        
+
         ## Integrate one time point ##
         if self.model.cur_tidx < self.model.t0idx:
             self.model.initialize()
@@ -1170,6 +1182,13 @@ class AlternatedSGD(Optimizer):
             - Clear dummy data
             - Reinsert deleted data
         """
+        if any(h._pending_ops_str() for h in self.model.history_set):
+            warn(f"Model {self.model.name} still has pending updates. "
+                 "Most likely one of the compilation functions forgot to call "
+                 "`model.theano_reset()` before returning – this could lead to "
+                 "contamination between compilation functions."
+                 f"{''.join(h.name + ': ' + h._pending_ops_str() for h in self.model.history_set)}")
+
         del_tidx = self._compile_context.deleted_tidx
         if del_tidx is not None:
             assert self.model.cur_tidx < del_tidx

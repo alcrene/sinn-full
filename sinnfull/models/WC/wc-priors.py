@@ -82,7 +82,8 @@ class WC_RichPrior(Prior):
         α = pm.Lognormal('α', np.log([100, 200]), 3*scale, shape=(M,))
         #β = pm.Lognormal('β', np.log(300.), 2*scale, shape=(M,))
         # Make β constant for fit stability (see [model notebook](./WC))
-        pm.Deterministic('β', shim.constant([300.]*M, dtype='float64'))
+        # pm.Deterministic('β', shim.constant([300.]*M, dtype='float64'))
+        pm.Deterministic('β', shim.constant([3.]*M, dtype='float64'))
         # Separate sign and magnitude information of w
         A = np.concatenate((np.ones(M//2, dtype='int16'),
                             -np.ones(M//2, dtype='int16')))

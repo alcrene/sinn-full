@@ -90,7 +90,8 @@ from pydantic.generics import GenericModel
 import mackelab_toolbox as mtb
 import mackelab_toolbox.serialize
 from mackelab_toolbox.utils import LongList
-from mackelab_toolbox.typing import json_like, Type, Array
+from mackelab_toolbox.typing import json_like, Array
+from smttask.typing import Type
 from sinn.utils.pydantic import initializer
 
 # %% tags=["hide-input"]

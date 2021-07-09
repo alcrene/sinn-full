@@ -72,7 +72,7 @@ get_field_values(records: Sequence[NamedTuple]) -> Dict[str,list]:
 def model_name_from_selector(model_selector: dict) -> str:
     Return a string summarizing the model described by `model_selector`.
     E.g. "ObservedDynamics[GaussianWhiteNoise,WilsonCowan]"
-    
+
 def shift_time_t0(time_axis: sinn.TimeAxis, t0: float):
     Shift the values of `time_axis` such that their t0 is equal to `t0`.
 
@@ -336,11 +336,11 @@ def get_scipy_dist(pymc_dist: Union[pm.model.PyMC3Variable, pm.Distribution],
     """
     Given a PyMC3 variable, return the corresponding distribution from
     scipy.stats.
-    
+
     Distributions are added on an as-needed basis, but generally easy to add.
-    
+
     Supported distributions:
-    
+
     - normal
     - lognormal
     """
@@ -357,7 +357,7 @@ def get_scipy_dist(pymc_dist: Union[pm.model.PyMC3Variable, pm.Distribution],
             raise NotImplementedError(
                 f"Transformed Distribution {dist.transformed_used}⁻¹("
                 f"+ {dist.dist}) not yet supported.")
-    
+
     # Not a transformed => Proceed
     if isinstance(dist, pm.Normal):
         mu, sigma = _shape_args(dist.shape, dist.mu, dist.sigma, idx=idx)
@@ -382,7 +382,7 @@ def dataset_from_histories(histories: Iterable['sinn.History'],
                            names: Optional[Iterable[str]]=None) -> xr.Dataset:
     """
     Combine a list of histories into an xarray Dataset.
-    
+
     Parameters
     ----------
     histories: Histories to combine

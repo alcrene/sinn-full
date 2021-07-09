@@ -16,7 +16,7 @@
     'λη' : 0.001,  # In units of stationary std dev
     'clip': 100.,  # Maximum increment is approx clip*λη
   },
-'T'  : Parameter(2, units='s'),
+'T'  : Parameter(1, units='s'),
 'Δt' : Parameter(2**-10, units='s', type='float64'),  # ~ 1ms
 'Tθb': Parameter(2**-5, units='s'),
 'Tθr': Parameter(2**-5, units='s'),

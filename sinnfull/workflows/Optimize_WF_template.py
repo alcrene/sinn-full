@@ -41,7 +41,7 @@ import sinn
 
 # %% tags=["remove-cell"]
 import logging
-logging.basicConfig()
+logging.basicConfig(level="INFO")
 logger = logging.getLogger("sinnfull.optimize_template")
 logger.setLevel(logging.DEBUG)
 
@@ -110,6 +110,7 @@ optimizer_rngkey = (2,0)
 param_rngkey = 3   # Base key: keys are generator as (param_key, i)
 sim_rngkey = 4     # Base key: keys are generator as (sim_key, i)
 sampler_rngkey = 5
+init_discard = 1 * ureg.s  # Amount of time to discard from the beginning of the data
 
 # Values are tag selectors; selectors are always sets of strings.
 # model_selector may be either a single select (i.e. set of tags)
@@ -173,10 +174,12 @@ from ast import literal_eval
 if Θ_init_key[0] == '(':
     Θ_init_key = literal_eval(Θ_init_key)
 g = globals()
+# Standard “just eval the string”
 for param in ['default_hyperparams', 'fit_hyperθ_updates',
               'synth_param_spec', 'prior_spec',
               'model_selector',  'objective_selectors',
-              'model_rngkey', 'optimizer_rngkey']:
+              'model_rngkey', 'optimizer_rngkey',
+              'init_discard']:
     pval = g[param]
     if isinstance(pval, str):
         pval = literal_eval(pval)
@@ -198,6 +201,11 @@ for param in ['model_selector', 'objective_selectors',
                 v = tuple(v)
             pval[k] = v
     g[param] = pval
+
+# %%
+# These vars need to be fully deserialized because we don’t just use them as argument
+from mackelab_toolbox.typing import PintValue
+init_discard = PintValue.json_decoder(init_discard)
 
 # %% [markdown]
 # An (experimental) alternative to using papermill to execute the notebook, is to use the function
@@ -271,9 +279,9 @@ fit_units = fit_hyperparams.units
 fit_hyperparams.remove_units(fit_units)
 
 # %%
-T    = fit_hyperparams.T
-Δt   = fit_hyperparams.Δt
-time = TimeAxis(min=0, max=T, step=Δt, unit=fit_units['[time]'])
+T    = fit_hyperparams.T * fit_units['[time]']
+Δt   = fit_hyperparams.Δt * fit_units['[time]']
+time = TimeAxis(min=init_discard, max=init_discard+T, step=Δt, unit=fit_units['[time]'])
 
 # %% [markdown]
 # ## Define the synthetic data
@@ -313,11 +321,10 @@ data = CreateSyntheticDataset(
 # - `t0` and `T` are used to select a fixed window to sample from.
 
 # %%
-t0 = 1*ureg.s
 segment_iterator = CreateFixedSegmentSampler(
     data=data,
     trial_filter={},
-    t0=t0, T=fit_hyperparams.T*ureg.s-t0,
+    t0=init_discard, T=fit_hyperparams.T*ureg.s,
     rng_key=(sampler_rngkey,)
 )
 
@@ -783,10 +790,12 @@ if True and exec_environment == "notebook":
 # Debugging options:
 # ```python
 # import theano
+# theano.config.compute_test_value = 'warn'
 # theano.config.optimizer = 'fast_compile'
 # theano.config.NanGuardMode__action = 'raise'
 # import mackelab_toolbox.optimizers
 # mackelab_toolbox.optimizers.debug_flags['print grads'] = True
+# # (compile functions with `shim.graph.compile(…, mode='guard:nan,inf,big')`)
 # ```
 
 # %%
