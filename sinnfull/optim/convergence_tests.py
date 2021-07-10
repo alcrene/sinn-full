@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # %%
 import math
 from typing import ClassVar
-from pydantic import BaseModel, conint, PositiveFloat
+from pydantic import BaseModel, conint, confloat, PositiveFloat
 from sinn.utils.pydantic import initializer
 
 # %%
@@ -109,16 +109,32 @@ class ConvergenceTest(BaseModel):
 # %%
 class DivergingCost(ConvergenceTest):
     """
+    Detects a failing fit; a failure is reported if at least one of these
+    conditions is met:
+
+    - The latest loss is either `NaN` or infinity.
+    - The loss is worse than it was when the fit started.
+      (Whether "worse" means greater or lesser than is determined by the flag
+      `maximize`.)
+
+    Since the evolution of the loss is generally not monotone, some tolerance
+    is applied for the second condition.
+
     Parameters
     ----------
     cost_recorder:
-        Recorder for a scalar cost.
+        Recorder for a scalar loss.
         Example: `~sinnfull.optim.recorders.LogpRecorder`
     maximize:
         Whether the optimizer tries to maximize or minimize the cost value.
         True=maximize, False=minimize.
         There is no default because getting the sign of the cost wrong
         is an extremely common mistake.
+    tol:
+        Tolerate the cost going below its initial value by this amount.
+        This is especially important when starting fits from already reasonable
+        values, since the progress is stochastic and even a good fit may dip
+        below the initial value.
 
     Returns
     -------
@@ -131,6 +147,7 @@ class DivergingCost(ConvergenceTest):
         # Used to prevent deserializing into a different subclass; each subclass must define a different name
     cost_recorder: str
     maximize     : bool
+    tol          : confloat(gt=0.)=100.
 
     def __call__(self, recorders: Dict[str,Recorder], optimizer: Optimizer):
         try:
@@ -147,8 +164,15 @@ class DivergingCost(ConvergenceTest):
             # then the initial value => Δ should be negative
         if self.maximize:
             Δ *= -1
-        if math.isnan(Δ) or (len(cost_recorder) > 10 and Δ > 0):
-            logger.info("Optimization terminated because of diverging cost.")
+        if not math.isfinite(Δ) or (len(cost_recorder) > 10 and Δ > self.tol):
+            msg = "Optimization terminated because of diverging loss."
+            if math.isnan(Δ):
+                msg += " (Loss is NaN)."
+            elif math.isinf(Δ):
+                msg += " (Loss is infinite)."
+            else:
+                msg += f" (Loss is {cost_recorder.values[-1]}; it was {cost_recorder.values[0]} at the start of the fit.)"
+            logger.info(msg)
             optimizer.outcome += ("Cost diverged.",)
             return OptimizerStatus.Failed
         else:

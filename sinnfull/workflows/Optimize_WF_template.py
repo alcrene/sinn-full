@@ -205,7 +205,7 @@ for param in ['model_selector', 'objective_selectors',
 # %%
 # These vars need to be fully deserialized because we don’t just use them as argument
 from mackelab_toolbox.typing import PintValue
-init_discard = PintValue.json_decoder(init_discard)
+init_discard = PintValue.json_decoder(init_discard, noerror=True)
 
 # %% [markdown]
 # An (experimental) alternative to using papermill to execute the notebook, is to use the function
@@ -329,7 +329,7 @@ segment_iterator = CreateFixedSegmentSampler(
 )
 
 # %% [markdown]
-# It's a very good idea to have a look at the synthetic data before committing CPU time to fitting it. Once you are confident the generated data is as expected, replace `True` by `False` to avoid plotting it unnecessarily.
+# It's a very good idea to have a look at the synthetic data before committing CPU time to fitting it. Once you are confident the generated data is as expected, replace `True` by `False` to avoid unnecessary plotting.
 
 # %% [markdown] tags=["remove-cell"]
 #     hv.renderer('bokeh').theme = 'dark_minimal'
