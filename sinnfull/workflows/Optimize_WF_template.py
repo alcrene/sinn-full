@@ -140,14 +140,14 @@ objective_selectors = {'input': {'GaussianWhiteNoise', 'log L'},
 params_objective  = None  # None = use default_objective
 latents_objective = None  # None = use default_objective
 prior_spec = ParameterSet(
-    {'input': {'selector': {'GWN', 'default'},
+    {'input': {'selector': {'GWN', 'floored'},
                'kwds': dict(mu_mean=[-0.25, -0.5],
                             logsigma_mean=[-1., -1.],
                             M=2)},
      'dynamics': {'selector': {'WC', 'rich'}, 'kwds': dict(M=2)},
      'observations': {'selector': {'GaussObs', 'independent'},
-                      'kwds': dict(logvar_mean=1.,
-                                   logvar_std=1.,
+                      'kwds': dict(logvar_mean=-1.,
+                                   logvar_std=3.,
                                    C=2,
                                    M=2)}
     })

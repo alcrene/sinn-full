@@ -121,10 +121,10 @@ if __name__ == "__main__":
 
 # %%
 @tag.zero_mean
-class GWN_ZeroMeanPrior(Prior):
+class GWN_ZeroMeanPrior(GWN_FixedMeanPrior):
     def __init__(self, M:int, logsigma_mean=0., logsigma_std=1.,
                         name="", model=None):
-        return GWN_FixedMean(M, 0, logsigma_mean, logsigma_std, name, model)
+        return super().__init__(M, 0, logsigma_mean, logsigma_std, name, model)
 
 
 # %% tags=["remove-input"]
@@ -133,6 +133,37 @@ if __name__ == "__main__":
     display(prior)
     
     print("μ = ", prior.μ.eval())
+    display(sample_prior(prior).cols(3))
+
+
+# %% [markdown]
+# ## Floored variance prior
+#
+# When inferring latents with gradient descent, flat functions is a rather common occurrence: they are a natural intermediate point when transforming one function into another. However, a flat function also means that gradient updates on the variance parameters of that input are pushed to zero, which then turns the flat latent into a stable local minimum. (Derivatives _away_ from the flat latent have to overcome an ever decreasing σ, and thus an *ever increasing cost* to even the smallest deviation.)
+#
+# To combat that, this prior sets a hard lower bound on σ. Whereas for `GWN_DefaultPrior` we have $\log σ \sim \mathcal{N}(μ_σ, σ_σ)$, `GWN_FlooredPrior` instead defines
+# $$\log σ \sim \begin{cases}\mathcal{N}(μ_σ, σ_σ) & \text{if $\log σ > μ_σ - σ_σ$} \\0 & \text{otherwise}\end{cases}$$
+
+# %%
+@tag.floored
+class GWN_FlooredPrior(Prior):
+    def __init__(self, M:int, mu_mean=0., mu_std=3., logsigma_mean=0., logsigma_std=1.5,
+                 name="", model=None):
+        super().__init__(name=name, model=model)
+        pm.Deterministic('M', shim.constant(M, dtype='int16'))
+        μ = pm.Normal('μ', mu_mean, mu_std, shape=(M,))
+        logσ = pm.TruncatedNormal('logσ', logsigma_mean, logsigma_std, shape=(M,),
+                                  lower=np.array(logsigma_mean)-np.array(logsigma_std),
+                                  upper=1e12,  # Omitting `upper` creates a 'lowerbound' RV (instead of an 'interval' RV), but still serializes to 'interval' RV – which causes issues with deserialization
+                                               # Can't use `inf` as upper bound, since then the forward transform always returns `inf` (since it computes with the bound)
+                                  testval=logsigma_mean)  # testval seems required by low-level init with Var(…), which is used during deserialization
+
+
+# %% tags=["remove-input"]
+if __name__ == "__main__":
+    prior = GWN_FlooredPrior(2)
+    display(prior)
+    
     display(sample_prior(prior).cols(3))
 
 # %% [markdown]
