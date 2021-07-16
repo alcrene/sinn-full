@@ -16,3 +16,17 @@ _build
 
 _merged_env.yaml
 .Rprofile
+
+# Indicators for temporary, wip and backup files
+tmp-*
+tmp_*
+*-tmp
+*-tmp.*
+*_tmp.*
+old-*
+*-old.*
+*.back*
+wip-*
+wip_*
+*-wip*
+*_wip*
