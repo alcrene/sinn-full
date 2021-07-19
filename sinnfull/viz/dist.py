@@ -3,15 +3,16 @@
 # jupyter:
 #   jupytext:
 #     formats: py:hydrogen
+#     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
 #     text_representation:
 #       extension: .py
 #       format_name: hydrogen
 #       format_version: '1.3'
 #       jupytext_version: 1.9.1
 #   kernelspec:
-#     display_name: Python (sinn-full)
+#     display_name: Python (sinnfull)
 #     language: python
-#     name: sinn-full
+#     name: sinnfull
 # ---
 
 # %% [markdown]
