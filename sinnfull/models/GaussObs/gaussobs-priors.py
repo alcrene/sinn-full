@@ -93,8 +93,10 @@ if __name__ == "__main__":
 #  &  & \ddots & \\
 #  &  &  &  \bar{W}_{NN}
 # \end{pmatrix} \\
-# \bar{W}_{ii} &= 1
+# \bar{W}_{ii} &= 1 \\
+# \log \bar{Σ} &\sim \mathcal{N}\bigl(μ_{\bar{Σ}}, Σ_\bar{Σ}\bigr)
 # \end{aligned}$$
+# As a special case, when $\texttt{logvar_std} = 0$, $\log \bar{Σ}$ is replaced by a deterministic variable equal to $e^{\texttt{logvar_mean}}$.
 
 # %%
 @tag.independent
@@ -108,13 +110,25 @@ class GaussObs_IndepPrior(Prior):
         pm.Deterministic('Wbar', shim.constant(np.eye(C), dtype=shim.config.floatX))
             # Identity matrix has no rounding errors, so we use the dtype that
             # will trigger the fewest errors/warnings
-        pm.Lognormal('Σbar', mu=logvar_mean, sigma=logvar_std,
-                     shape=(C,))
+        if logvar_std == 0:
+            Σbar = np.ones(C)*np.exp(logvar_mean)
+            assert Σbar.shape == (C,)
+            pm.Deterministic('Σbar', shim.constant(Σbar, dtype=shim.config.floatX))
+        else:
+            pm.Lognormal('Σbar', mu=logvar_mean, sigma=logvar_std,
+                         shape=(C,))
 
 
 # %% tags=["remove-input"]
 if __name__ == "__main__":
     prior = GaussObs_IndepPrior(2, 2)
+    display(prior)
+    
+    display(sample_prior(prior).cols(3))
+
+# %% tags=["remove-input"]
+if __name__ == "__main__":
+    prior = GaussObs_IndepPrior(2, 2, logvar_std=0)
     display(prior)
     
     display(sample_prior(prior).cols(3))

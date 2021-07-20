@@ -537,11 +537,16 @@ class Prior(PyMC_Model):
         givens = {}
         for v in mvars:
             if isinstance(getattr(v, 'distribution', None), pm.Constant):
+                # NB: This condition catches PyMC3 Constant distributions, which
+                #     are not the recommended way of making variables constant.
+                #     (For one, they only work with integer variables.)
+                #     The recommended way is to wrap a tt.Constant with
+                #     pm.Deterministic, which needs no special treatment
                 givens[v] = shim.constant(v.tag.test_value, dtype=v.dtype)
         f = theano.function(ovars, mvars, givens=givens)
             # We use `theano` since with PyMC3, we will always have Theano
-            # objects. If we used `shim.graph.compile`, it would complain
-            # that Theano isn't loaded (within shim).
+            # objects. If we used `shim.graph.compile`, it will complain
+            # if Theano isn't yet loaded within shim.
         # mvars2 = [shim.graph.clone(v, replace=givens) for v in mvars]
         # f = shim.graph.compile(ovars, mvars2, on_unused_input='ignore')
         return f

@@ -90,7 +90,7 @@ class WC_RichPrior(Prior):
         _w_mag = pm.Lognormal('_w',
                               mu=np.log([[ 1.60, 4.70],
                                          [ 3.00, 0.13]]),
-                              sigma=3*scale,
+                              sigma=1.*scale,
                               shape=(M,M))
         w = pm.Deterministic('w', A*_w_mag)
         #h = pm.Normal('h', 0., 2*scale, shape=(M,))

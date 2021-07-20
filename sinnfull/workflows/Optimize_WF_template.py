@@ -146,8 +146,8 @@ prior_spec = ParameterSet(
                             M=2)},
      'dynamics': {'selector': {'WC', 'rich'}, 'kwds': dict(M=2)},
      'observations': {'selector': {'GaussObs', 'independent'},
-                      'kwds': dict(logvar_mean=-1.,
-                                   logvar_std=3.,
+                      'kwds': dict(logvar_mean=-4.,
+                                   logvar_std=0.,
                                    C=2,
                                    M=2)}
     })
@@ -482,6 +482,32 @@ else:
 # %%
 if hasattr(modelΘ_init, 'get_values'):
     modelΘ_init = modelΘ_init.get_values()
+
+# %% [markdown]
+# It can happen that we want to fit only a subset of parameters; in that case, `prior` will have a `Deterministic` wrapping a `Constant` variable for the fixed values. We want the initial parameters to be equal to those fixed values, *not* what we sampled above, event if we initialize with ground truth.
+
+# %%
+for nm, v in prior.model_vars.items():
+    if (nm in modelΘ_init
+        and (isinstance(getattr(v, 'distribution', None), pm.Constant)
+             or (isinstance(v, pm.model.DeterministicWrapper)
+                 and set(pm.model._walk_up_rv(v)) == {'Constant'}))):
+        target_v = modelΘ_init[nm]
+        assert target_v.dtype == v.dtype
+        modelΘ_init[nm] = v.tag.test_value
+
+optim_var_names = set(prior.optim_vars.keys())
+Θ_init = {k:v for k,v in Θ_init.items() if k in optim_var_names}
+if optim_var_names != set(Θ_init):
+    raise ValueError(
+        "The set of initial parameter values (in optimization space) does not "
+        "match the set of parameters to optimize as defined by the prior.\n"
+        f"Prior parameters: {sorted(optim_var_names)}\n"
+        f"Init parameters:  {sorted(Θ_init)}\n"
+        "When initializing with ground truth, the non-constant distributions "
+        "of the prior must match those of ground truth model. (E.g. a "
+        "LogNormal prior can't be used for a parameter sampled from Normal.)"
+    )
 
 # %% [markdown]
 # ## Instantiate the model
