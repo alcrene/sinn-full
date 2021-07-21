@@ -68,7 +68,8 @@ import re                 # For Utility functions - get_init_key
 import abc                # For Plotting functions - ColorEvolCurve
 import itertools
 import functools
-from collections import defaultdict
+import numbers
+from collections import defaultdict, UserDict
 from scipy import signal  # For decimating fit curves
 import pandas as pd
 from tqdm.auto import tqdm
@@ -282,6 +283,71 @@ default_split_dims    = [key_dims.get('model'),
                          key_dims.get('latents', label='latent vars'),
                          key_dims.get('observed', label='observed vars')]
 default_split_dims    = {dim.name: dim for dim in default_split_dims}
+
+
+# %% [markdown]
+# The fields displayed by `run_results()`.
+
+# %%
+from collections import UserDict
+class ResultFields(dict):
+    def __init__(self, fit, fitcoll):
+        super().__init__()
+        self.logL = fit.logL_evol.values
+        self.fitcoll = fitcoll
+        
+        self[('hyperparams', 'init_key')] = self.init_key(fit)
+        self[('hyperparams', 'Λ set')]    = self.Λ_set(fit)
+        for Λi_name, Λi_val in self.hyperparams(fit).items():
+            self[('hyperparams', Λi_name)] = Λi_val
+        self[('loss', 'max logL')]        = self.maxlogL(fit)
+        self[('loss', 'last logL')]       = self.lastlogL(fit)
+        self[('loss', 'has NaNs')]        = self.hasnans(fit)
+        self[('run', 'outcome')]          = self.outcome(fit)
+        self[('run', 'reason')]           = self.reason(fit)
+        self[('run', 'duration')]         = self.duration(fit)
+        self[('run', '# recorded steps')] = self.nrecsteps(fit)
+        self[('run', 'last recorded step')] = self.lastrecstep(fit)
+        
+    def init_key(self, fit): return fit.key.init_key
+    def Λ_set(self, fit):    return fit.key.Λ
+    def maxlogL(self, fit):  return round(max(self.logL), 2)
+    def lastlogL(self, fit): return round(self.logL[-1], 2)
+    def hasnans(self, fit):  return np.isnan(self.logL).any()
+    def nrecsteps(self, fit):return len(fit.logL_evol)
+    def lastrecstep(self, fit):return fit.logL_evol.steps[-1]
+    def outcome(self, fit):
+        outcome = str(fit.record.outcome).lower()
+        if 'not converged' in outcome:
+            return "Not converged"
+        elif 'converged' in outcome:
+            return "Converged"
+        elif 'failed' in outcome:
+            return "Failed"
+        else:
+            return str(fit.record.outcome)
+    def reason(self, fit):
+        reason = fit.record.reason
+        if isinstance(reason, tuple):
+            reason = reason[0]
+        return reason.split('\n')[0]
+    def duration(self, fit):
+        s = fit.record.duration
+        D, s = s // 86400, s % 86400
+        h, s = s // 3600, s % 3600
+        m, s = s // 60, s % 60
+        if D:
+            return f"{D:i}D {h:01}h {m:02}m {s:02}s"
+        elif h:
+            return f"{h:01}h {m:02}m {s:02}s"
+        elif m:
+            return f"{m:02}m {s:02}s"
+        elif s:
+            return f"{s:02}s"
+    def hyperparams(self, fit):
+        Λset = self.fitcoll.Λsets[fit.key.Λ]
+        return {Λi_name: Λset[Λi_name]
+                for Λi_name in self.fitcoll.abbrev_Λ_names}
 
 
 # %% [markdown]
@@ -1503,25 +1569,32 @@ class RSView(smttask.RecordStoreView):
     @add_to('RSView')
     def compute_summaries(self):
         if self.split_rsviews:
-            dframes = {k: rsview.dframe(include=self.summary_fields)
-                       for k, rsview in self.split_rsviews.items()}
-            hists = {}
-            for k, df in dframes.items():
-                for field in self.summary_fields:
-                    hist = hv.operation.histogram(hv.Table(df[field]), bins='auto')
-                    hist = hist.relabel(group=field, label=self.make_split_label(k))
-                    assert isinstance(k, tuple)
-                    hists[k + (field,)] = hist
-            return hv.HoloMap(hists,
-                              kdims=list(self.split_dims) + [key_dims.get('rec_stat', label='record statistic')])
+            holomaps = {k: rsview.compute_summaries()
+                        for k, rsview in self.split_rsviews.items()}
+            holomap = hv.HoloMap(holomaps, kdims=list(self.split_dims))
+            return holomap.collate()  # Merge the two Holomap levels together
         else:
-            df = self.dframe(include=self.summary_fields)
-            hists = {}
-            for field in self.summary_fields:
-                hist = hv.operation.histogram(hv.Table(df[field]), bins='auto')
-                hist = hist.relabel(group=field, label=root_key.label)
-                hists[field] = hist
-            return hv.HoloMap(hists, kdims=[key_dims.get('rec_stat', label='record statistic')])
+            return super().compute_summaries()
+        # if self.split_rsviews:
+        #     dframes = {k: rsview.dframe(include=self.summary_fields)
+        #                for k, rsview in self.split_rsviews.items()}
+        #     hists = {}
+        #     for k, df in dframes.items():
+        #         for field in self.summary_fields:
+        #             hist = hv.operation.histogram(hv.Table(df[field]), bins='auto')
+        #             hist = hist.relabel(group=field, label=self.make_split_label(k))
+        #             assert isinstance(k, tuple)
+        #             hists[k + (field,)] = hist
+        #     return hv.HoloMap(hists,
+        #                       kdims=list(self.split_dims) + [key_dims.get('rec_stat', label='record statistic')])
+        # else:
+        #     df = self.dframe(include=self.summary_fields)
+        #     hists = {}
+        #     for field in self.summary_fields:
+        #         hist = hv.operation.histogram(hv.Table(df[field]), bins='auto')
+        #         hist = hist.relabel(group=field, label=root_key.label)
+        #         hists[field] = hist
+        #     return hv.HoloMap(hists, kdims=[key_dims.get('rec_stat', label='record statistic')])
 
     # %%
     @add_to('RSView')
@@ -1539,28 +1612,17 @@ class RSView(smttask.RecordStoreView):
         return table.opts(BokehOpts().table(nrows=nrows))
 
     @add_to('RSView')
-    def summary_hist(self, stat_field: str) -> Union[hv.Histogram,hv.Overlay]:
+    def summary_hist(self, stat_field: str) -> hv.Overlay:
         """
         `feature`: One of the features listed in `self.summary_fields`.
-        
+
         Returns
         -------
         Histogram:          If the RSView is not split
         Overlay[Histogram]: If the RSView is split
         """
-        # Ensure that `feature` matches one of the values
-        if stat_field not in self.summary_fields:
-            raise ValueError(f"`feature` must be one of {self.summary_fields}. "
-                             f"Received {repr(stat_field)}.")
-        hists = self.summaries.select(rec_stat=stat_field)
-        if isinstance(hists, hv.Histogram):
-            hists = [hists]
-        hist_opts = BokehOpts().hist_records
-        ov = hv.Overlay([hist.opts(hist_opts) for hist in hists]).collate()
-        if isinstance(ov, hv.Overlay):
-            # TODO: How to set this in viz.config ?
-            ov.opts(legend_position='right')
-        return ov
+        ov = super().summary_hist(stat_field)
+        return ov.opts(BokehOpts().hist_records)
 
 # %% [markdown]
 # ### Loading fit data
@@ -1723,31 +1785,8 @@ class RSView(smttask.RecordStoreView):
             data = {}
             Λsets = fitcoll.Λsets
             for fit in fitcoll:
-                logL = fit.logL_evol.values
-                s = fit.record.duration
-                h, s = s // 3600, s % 3600
-                m, s = s // 60, s % 60
-                duration = "{:01}h {:02}m {:02}s".format(int(h),int(m),int(s))
-                # TODO: This should be a set of functions outside the loop.
-                #   That way: 1. They are easier to modify
-                #             2. The special case below where len() == 0
-                #                doesn't have to be hard coded.
-                reason = fit.record.reason
-                if isinstance(reason, tuple):
-                    reason = reason[0]
-                reason = reason.split('\n')[0]
-                data[fit.record.label] = {
-                    ('hyperparams', 'init_key'): fit.key.init_key,
-                    ('hyperparams', 'Λ set'): fit.key.Λ,
-                    ('loss', 'max logL')    : round(max(logL), 2),
-                    ('loss', 'last logL')   : round(logL[-1], 2),
-                    ('loss', 'has NaNs')    : np.isnan(logL).any(),
-                    ('run', 'duration')     : duration,
-                    ('run', 'reason')       : reason
-                    }
-                for Λi_name in fitcoll.abbrev_Λ_names:
-                    data[fit.record.label][('hyperparams', Λi_name)] = \
-                        Λsets[fit.key.Λ][Λi_name]
+                data[fit.record.label] = ResultFields(fit, fitcoll)
+                # ResultFields returns a dict with length 2 tuples as keys (category, field)
 
             df = pd.DataFrame(
                   data,
@@ -1765,9 +1804,9 @@ class RSView(smttask.RecordStoreView):
             # TODO: Get them from the list of display functions
             return hv.Table([], kdims=['Λ set'], vdims=['max logL', 'last logL', 'has NaNs', 'duration', 'reason'])
         elif len(tables) == 1:
-            return next(iter(tables.values()))
+            return next(iter(tables.values())).opts(BokehOpts().run_results)
         else:
-            return hv.HoloMap(tables, kdims=self.SplitKey.kdims)
+            return hv.HoloMap(tables, kdims=self.SplitKey.kdims).overlay().opts(BokehOpts().run_results)
 
 # %% [markdown]
 # ### Label & key making methods

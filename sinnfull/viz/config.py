@@ -68,22 +68,30 @@ class BokehOpts(metaclass=Singleton):
     hist_records: hv.Options = default_factory('hist_records', lambda:
         hv.opts.Histogram(
             alpha=0.75, height=150, responsive=True)
-        )
+    )
+        
+    run_results: hv.Options = default_factory('run_results', lambda:
+        hv.opts.Table(
+            editable=True)  # Editable allows selecting & copying record labels
+    )
 
     ensemble_curve: hv.Options = default_factory('ensemble_curve', lambda:
         hv.opts.Curve(
             color='#999999', alpha=0.5, level='underlay', line_width=1,
-            tools=['hover'], show_legend=False))
+            tools=['hover'], show_legend=False)
+    )
 
     accent_curve: hv.Options = default_factory('accent_curve', lambda:
         hv.opts.Curve(
             color=sns.color_palette()[3], alpha=1, level='glyph', line_width=2.2,
-            tools=['hover'], show_legend=False))
+            tools=['hover'], show_legend=False)
+    )
 
     # For mpl: zorder between ensemble & accent, thicker linewidth
     target_hline: hv.Options = default_factory('target_hline', lambda:
         hv.opts.HLine(
-            color='k', alpha=1, line_width=1.5, level='underlay'))
+            color='k', alpha=1, line_width=1.5, level='underlay')
+    )
 
     # FIXME: Also define Curve styling ?
     true_η: hv.Options = default_factory('true_η', lambda:
