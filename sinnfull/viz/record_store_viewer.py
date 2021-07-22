@@ -1575,26 +1575,6 @@ class RSView(smttask.RecordStoreView):
             return holomap.collate()  # Merge the two Holomap levels together
         else:
             return super().compute_summaries()
-        # if self.split_rsviews:
-        #     dframes = {k: rsview.dframe(include=self.summary_fields)
-        #                for k, rsview in self.split_rsviews.items()}
-        #     hists = {}
-        #     for k, df in dframes.items():
-        #         for field in self.summary_fields:
-        #             hist = hv.operation.histogram(hv.Table(df[field]), bins='auto')
-        #             hist = hist.relabel(group=field, label=self.make_split_label(k))
-        #             assert isinstance(k, tuple)
-        #             hists[k + (field,)] = hist
-        #     return hv.HoloMap(hists,
-        #                       kdims=list(self.split_dims) + [key_dims.get('rec_stat', label='record statistic')])
-        # else:
-        #     df = self.dframe(include=self.summary_fields)
-        #     hists = {}
-        #     for field in self.summary_fields:
-        #         hist = hv.operation.histogram(hv.Table(df[field]), bins='auto')
-        #         hist = hist.relabel(group=field, label=root_key.label)
-        #         hists[field] = hist
-        #     return hv.HoloMap(hists, kdims=[key_dims.get('rec_stat', label='record statistic')])
 
     # %%
     @add_to('RSView')

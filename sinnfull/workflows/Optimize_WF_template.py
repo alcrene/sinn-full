@@ -135,10 +135,10 @@ default_hyperparams = optim_paramsets['WC'].default   # Defined in [projectdir]/
 # or lists (to indicate multiple objectives).
 # All objectives are ultimately summed together
 # (Future: we may add notation for coefficients multiplying objectives)
-objective_selectors = {'input': {'GaussianWhiteNoise', 'log L'},
-                       'observations': {'GaussObs', 'log L'}}
-params_objective  = None  # None = use default_objective
-latents_objective = None  # None = use default_objective
+default_objective = None
+params_objective = {'input': {'GaussianWhiteNoise', 'log L'},
+                    'observations': {'GaussObs', 'log L'}}
+latents_objective = {'observations': {'GaussObs', 'log L'}}
 prior_spec = ParameterSet(
     {'input': {'selector': {'GWN', 'floored'},
                'kwds': dict(mu_mean=[-0.25, -0.5],
@@ -177,7 +177,8 @@ g = globals()
 # Standard “just eval the string”
 for param in ['default_hyperparams', 'fit_hyperθ_updates',
               'synth_param_spec', 'prior_spec',
-              'model_selector',  'objective_selectors',
+              'model_selector', 
+              'default_objective', 'params_objective', 'latents_objective',
               'model_rngkey', 'optimizer_rngkey',
               'init_discard']:
     pval = g[param]
@@ -189,7 +190,8 @@ for param in ['default_hyperparams', 'fit_hyperθ_updates',
                 pval[k] = literal_eval(v)
     g[param] = pval
 # JSON converts sets into lists. Convert them back to sets/tuples.
-for param in ['model_selector', 'objective_selectors',
+for param in ['model_selector',
+              'default_objective', 'params_objective', 'latents_objective',
               'synth_param_spec', 'prior_spec']:
     pval = g[param]
     if isinstance(pval, dict):
@@ -240,7 +242,12 @@ ModelClass = get_model_class(model_selector)
 # Retrieve all the objectives and sum them.
 
 # %%
-default_objective = sum(get_objectives(objective_selectors))
+if default_objective is not None:
+    default_objective = sum(get_objectives(default_objective))
+if params_objective is not None:
+    params_objective = sum(get_objectives(params_objective))
+if latents_objective is not None:
+    latents_objective = sum(get_objectives(latents_objective))
 
 # %% [markdown]
 # Retrieve the prior on the parameters. This is added to the objectives by the optimizer.
@@ -827,6 +834,11 @@ if True and exec_environment == "notebook":
 # %%
 if exec_environment == "notebook":
     result = optimize.run(record=False, recompute=True)
+
+# %%
+
+# %% [raw]
+#
 
 # %% [markdown]
 # ---

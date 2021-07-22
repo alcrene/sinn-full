@@ -857,6 +857,7 @@ class Prior(PyMC_Model):
 # %% tags=["hide-input"]
 
 class PureFunctionObjective(PureFunction):
+    modules = [__name__]  # Include this module when deserializing functions. In particular, this defines the @tag decorator
     submodel: str=""
     @classmethod
     def validate(cls, value):  # Without this wrapper, values would be cast to PureFunction
@@ -1197,14 +1198,20 @@ class ObjectiveFunction(BaseModel, abc.ABC, metaclass=ObjectiveFunctionMeta):
     def __add__(self, other):
         a, b = self.validate_op_args(other)
         tags = self.combine_tags(other)
+        if other == 0 and tags == self.tags:
+            return self  # Allows using sum([ObjFn]) without creating unnecessary Composite functions
         return type(self)(func=CompositePureFunctionObjective(operator.add, a, b), tags=tags)
     def __radd__(self, other):
         a, b = self.validate_op_args(other)
         tags = self.combine_tags(other)
+        if other == 0 and tags == self.tags:
+            return self  # Idem
         return type(self)(func=CompositePureFunctionObjective(operator.add, b, a), tags=tags)
     def __sub__(self, other):
         a, b = self.validate_op_args(other)
         tags = self.combine_tags(other)
+        if other == 0 and tags == self.tags:
+            return self  # Idem
         return type(self)(func=CompositePureFunctionObjective(operator.sub, a, b), tags=tags)
     def __rsub__(self, other):
         a, b = self.validate_op_args(other)

@@ -237,8 +237,7 @@ class AlternatedSGD(Optimizer):
     logp: Function (tidx) -> Real
         Serves as a default for either `logp_params` or `logp_latents`.
         Note that this is not an accumulator; it will be wrapped with
-        either `model.accumulate` (`logp_params`) or
-        `model.static_accumulate` (`logp_latents`).
+        `model.accumulate`.
         If `logp` is not provided, and the model defines a `logp`
         attribute, then that is used as default.
     logp_nodyn: Function (tidx) -> Real
@@ -324,10 +323,10 @@ class AlternatedSGD(Optimizer):
             logp_latents = logp_default
         acc_latents = getattr(logp_latents, '_accumulator', None)
         if acc_latents is None:
-            logp_latents = model.static_accumulate(logp_latents)
-        elif acc_latents != 'static_accumulate':
-            raise ValueError("The accumulator `logp_latents` should be wrapped with "
-                             f"the 'static_accumulate' decorator, not '{acc_latents}'.")
+            logp_latents = model.accumulate(logp_latents)
+        # elif acc_latents != 'static_accumulate':
+        #     raise ValueError("The accumulator `logp_latents` should be wrapped with "
+        #                      f"the 'static_accumulate' decorator, not '{acc_latents}'.")
         return logp_latents
 
     @initializer('logp_latents_nodyn', always=True)
@@ -1453,11 +1452,22 @@ class AlternatedSGD(Optimizer):
             # symbolic end points, then substitute required values.
             latent_logp, _ = self.logp_latents(self.model.curtidx_var, self.model.batchsize_var)
             assert np.can_cast(self.model.time.unpadded_length, self.model.batchsize_var.dtype)
+            # NB: `constant` ensures we replace Theano vars by Theano vars
+            # NB: Typically the forward accumulator is offset by 1; shift k0 accordingly
+            if not hasattr(self.logp_params, 'start_offset'):
+                raise AttributeError(
+                    "The `logp_params` argument to AlternatedSGD does not seem "
+                    "to have been created with the `sinn.models.Model.accumulate` "
+                    "decorator.")
+            k0 = self.model.t0idx - self.logp_params.start_offset
             latent_logp = shim.graph.clone(
                 latent_logp,
-                replace={self.model.curtidx_var: self.model.t0idx,
-                         self.model.batchsize_var: self.model.time.unpadded_length.astype(self.model.batchsize_var.dtype)}
-            )
+                replace={self.model.curtidx_var: shim.constant(
+                             k0,
+                             name=f"k0 (cst = 0)",
+                             dtype=self.model.curtidx_var.dtype),
+                         self.model.batchsize_var: self.Kshared
+            })
             assert not shim.get_updates()
 
             latent_logp = self.prior_params.sub_optim_vars(latent_logp, self.Θ)
