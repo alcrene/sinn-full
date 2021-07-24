@@ -36,6 +36,7 @@ import re
 import warnings
 from warnings import warn
 from typing import Optional, Union, List, Tuple, Dict
+from types import SimpleNamespace
 from pathlib import Path
 from functools import lru_cache
 import numpy as np
@@ -131,7 +132,10 @@ class SyntheticTrial(BaseTrial):
         Deserialize Arrays manually, since IndexableNamespace does not do it
         """
         for key, val in ns.items():
-            if json_like(val, 'Array'):
+            if isinstance(val, SimpleNamespace):
+                # Recurse into parameters for nested models
+                ns[key] = cls.deserialize_arrays(ns[key])
+            elif json_like(val, 'Array'):
                 ns[key] = Array.validate(val)
         return ns
             
