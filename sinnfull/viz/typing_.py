@@ -126,6 +126,12 @@ class KeyDimensions(dict):
     The default `pretty_names` dictionary is used to set the dimension label.
     """
     def get(self, dim_name: str, *, label=None) -> hv.Dimension:
+        if isinstance(dim_name, hv.Dimension):
+            if label is not None and dim_name.name != dim_name.label:
+                raise TypeError("Specifying both a full Holoviews Dimension "
+                                "and a label is ambiguous.")
+            label = dim_name.label
+            dim_name = dim_name.name
         try:
             dim = self[dim_name]
         except KeyError:
@@ -135,7 +141,7 @@ class KeyDimensions(dict):
             self[dim_name] = dim
         else:
             if label is not None and dim.name == dim.label and dim_name != label:
-                # Heuristic: Assume that name == label => no label was assigned
+                # Heuristic: Assume that name == label implies that no label was assigned
                 logger.debug(f"Assigning label '{label} to dimension "
                              f"'{dim.name}' because it had no previous label.")
                 self[dim_name].label = label

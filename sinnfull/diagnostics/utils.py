@@ -26,6 +26,8 @@ data = "Call `load_record` before other functions in this module."
 ηhist = "Call `load_record` before other functions in this module."
     # The history to investigate (in particular, the one for which λη is calculated)
 
+## Retrieving record data ##
+    
 # TODO: Change to the functions below
 
 class RecordData:
@@ -160,16 +162,6 @@ class RecordData:
         # Set the optimizer step
         self.optimizer.stepi = ηstep
 
-def set_to_zero():
-    """
-    Zero the model histories.
-    Model parameters are left unchanged
-    """
-    with sinn.utils.unlocked_hists(*model.history_set):
-        for h in model.history_set:
-            h[:] = 0
-
-
 ## Changing the state of an optimizer ##
 # Recreate the state of an optimizer based on recorded state
 
@@ -182,6 +174,15 @@ from sinn.utils import unlocked_hists
 from sinnfull.utils import dataset_from_histories
 from sinn.utils import unlocked_hists
 from sinnfull.utils import shift_time_t0
+
+def set_to_zero():
+    """
+    Zero the model histories.
+    Model parameters are left unchanged
+    """
+    with sinn.utils.unlocked_hists(*model.history_set):
+        for h in model.history_set:
+            h[:] = 0
 
 DataType = Union[Dict[str,Union[sinn.History,np.ndarray]], xr.Dataset]
 def merge_data(timeaxis: sinn.TimeAxis, data: Union[DataType, Sequence[DataType]]
@@ -302,9 +303,9 @@ def set_model(model,
         data_dt = np.diff(data.time).mean() * model.time.unit
     assert np.isclose(model.dt, data_dt)
     t0 = model.time.t0
-    t0idx = data.time.searchsorted(t0)
-        # Because `data` may include padding bins, and model.time typically
-        # does not, t0 in the data and in model.time may not be the same.
+    t0idx = data.time.searchsorted(getattr(t0, 'magnitude', t0))
+        # Strictly speaking, t0 in the data and in model.time may differ,
+        # although normally they should not
     if not np.isclose(data.time[t0idx].data*model.time.unit, t0):
         # We can end up here if the model time axis wasn't shifted to align
         # with the data

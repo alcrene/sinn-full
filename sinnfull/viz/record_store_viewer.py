@@ -85,7 +85,7 @@ from sinnfull.parameters import ParameterSet
 from sinnfull.utils import add_to, add_property_to, model_name_from_selector
 from sinnfull.viz.config import pretty_names, BokehOpts
 from sinnfull.viz.typing_ import StrTuple, KeyDimensions, ParamDimensions
-from sinnfull.viz.utils import get_logL_quantile
+from sinnfull.viz._utils import get_logL_quantile
 from sinnfull.viz.hooks import hide_table_index
 
 # %% tags=["remove-cell"]
@@ -453,15 +453,19 @@ def param_str(params: dict, include: Optional[List[str]]=None, exclude: Optional
 
 
 # %%
-def make_key_label(key: Union[namedtuple,str], format: str='default') -> str:
+def make_key_label(key: Union[namedtuple,str], format: str='default',
+                   fields: Optional[List[str]]=None) -> str:
     if isinstance(key, str):
         # Early exit: just prettify with `make_slug` and exit
         return make_slug(key_field, separable_collections=(list, set), format=format)
-    if not hasattr(key, '_fields'):
-        raise TypeError("`key` must be a namedtuple (or at least define '_fields').")
+    if fields is None:
+        if not hasattr(key, '_fields'):
+            raise TypeError("If `fields` is not provided, `key` must be a "
+                            "namedtuple (or at least define '_fields').")
+        fields = key._fields
     label_els = []
     assert len(key) == len(key._fields)  # In case 'namedtuple' was faked with a _fields attr
-    for key_field, field in zip(key, key._fields):
+    for key_field, field in zip(key, fields):
         key_str = make_slug(key_field, separable_collections=(list, set),
                             format=format)
         label_els.append(f"{field.capitalize()}: {key_str}")
@@ -1234,7 +1238,7 @@ class FitData(BaseModel):
     def ground_truth_η_curves(self, trial=None):
         if self._gt_η_curves is None:
             bokeh_opts = BokehOpts()
-            η = self.ground_truth_η()  # η: xarray.Dataset
+            η = self.ground_truth_η(trial)  # η: xarray.Dataset
             # Reduced number of data points the date so that files aren't so big
             stops = self.model.time.stops_array
             interpolated_stops = np.linspace(stops[0], stops[-1],
@@ -1386,13 +1390,12 @@ class RSView(smttask.RecordStoreView):
         super().__init__(*args, **kwargs)
         self.key = key
         self.split_rsviews = None
-        self.split_dims = {}
         self._summaries = None
         self._all_init_keys = None
 
     @property
     def kdims(self):
-        return list(self.split_dims.values())
+        return self.SplitKey.kdims
 
     def splitby(self, split_fields: Optional[Sequence[str]] = None,
                 split_dims: Dict[str, hv.Dimension] = None,
@@ -1411,6 +1414,11 @@ class RSView(smttask.RecordStoreView):
             split_dims = default_split_dims
         split_names = list(split_dims)
         assert len(split_dims) == len(split_fields)  # There must be one dim for each field
+        # Retrieve split dims dimensions. This does two things:
+        # 1) standardizes variable (no strings, all Dimensions)
+        # 2) Ensures no duplicates with the global key_dims registry, and sets
+        #    sets their labels if `split_dims` provides them
+        split_dims = {k: key_dims.get(dim) for k,dim in split_dims.items()}
 
         # Split the record store with parent method
         split_rs = super().splitby(
@@ -1430,8 +1438,8 @@ class RSView(smttask.RecordStoreView):
         # Store some extra attributes
         self.split_rsviews = split_rs
         self.SplitKey = make_key(type(next(iter(split_rs))))
-        self.split_dims = {k:v for k,v in split_dims.items() if k in self.SplitKey._fields}
-            # Remove dropped fields from split_dims
+        # self.split_dims = {k:v for k,v in split_dims.items() if k in self.SplitKey._fields}
+        #     # Remove dropped fields from split_dims
 
         # Invalidate pre-computed summaries
         self._summaries = None
@@ -1473,17 +1481,17 @@ class RSView(smttask.RecordStoreView):
 # ### Record store representation
 
     # %%
-    @add_to('RSView')
-    def _repr_mimebundle_(self, include=None, exclude=None):
-        if not isinstance(self._iterable, Sequence):
-            # Can't compute stats without risking to consume the iterable
-            # -> Fall back to parent's repr
-            return None
-        return hv.Layout([self.counts_table()]
-                         + [self.summary_hist(feature)
-                            for feature in self.summary_fields]) \
-               .cols(1) \
-               ._repr_mimebundle_(include, exclude)
+    # @add_to('RSView')
+    # def _repr_mimebundle_(self, include=None, exclude=None):
+    #     if not isinstance(self._iterable, Sequence):
+    #         # Can't compute stats without risking to consume the iterable
+    #         # -> Fall back to parent's repr
+    #         return None
+    #     return hv.Layout([self.counts_table()]
+    #                      + [self.summary_hist(feature)
+    #                         for feature in self.summary_fields]) \
+    #            .cols(1) \
+    #            ._repr_mimebundle_(include, exclude)
 
 # %% [markdown]
 # ### Lists of keys
@@ -1571,7 +1579,7 @@ class RSView(smttask.RecordStoreView):
         if self.split_rsviews:
             holomaps = {k: rsview.compute_summaries()
                         for k, rsview in self.split_rsviews.items()}
-            holomap = hv.HoloMap(holomaps, kdims=list(self.split_dims))
+            holomap = hv.HoloMap(holomaps, kdims=self.SplitKey.kdims)
             return holomap.collate()  # Merge the two Holomap levels together
         else:
             return super().compute_summaries()
@@ -1793,10 +1801,11 @@ class RSView(smttask.RecordStoreView):
 
     # %%
     @add_to('RSView')
-    @staticmethod
-    def make_split_label(key: namedtuple, format: str='default') -> str:
+    def make_split_label(self, key: namedtuple, format: str='default') -> str:
         "Overrides `RecordStoreView.make_split_label` to make use of `pretty_names`."
-        return make_key_label(key, format)
+        assert key._fields == tuple(dim.name for dim in self.SplitKey.kdims)
+        return make_key_label(
+            key, format, fields=(dim.label for dim in self.SplitKey.kdims))
 
 # %% [markdown]
 # ### Plotting fit ensembles
@@ -1814,7 +1823,7 @@ class RSView(smttask.RecordStoreView):
         """
         logL_curves = hv.HoloMap({split_key: rs.fitcoll.logL_curves(color=color, filter=filter)
                                   for split_key, rs in self.split_rsviews.items()},
-                                 kdims=list(self.split_dims.values()))
+                                 kdims=self.SplitKey.kdims)
         logL_curves = logL_curves.collate()
         return logL_curves
 
@@ -1916,7 +1925,16 @@ class RSView(smttask.RecordStoreView):
                         frame_data[framekey] = blanks[panelkey].clone()
                         for θ_layout in all_θ_layouts:
                             if panelkey in θ_layout and framekey in θ_layout[panelkey]:
-                                frame_data[framekey] = θ_layout[panelkey][framekey]
+                                θ_panel = θ_layout[panelkey][framekey]
+                                if isinstance(θ_panel, hv.Overlay):
+                                    # I'm not sure why, but this fixes an issue where changing HoloMap
+                                    # widget values left ghost curves from previous values.
+                                    # It also fixes panel title which where all equal to the first panel after a 'select'
+                                    # Probably all the reshaping we do causes a state attribute to get
+                                    # out of sync, and rebuilding puts it back to a default/unset state
+                                    θ_panel = hv.Overlay(θ_panel.values(), kdims=θ_panel.kdims,
+                                                         vdims=θ_panel.vdims, label=θ_panel.label)
+                                frame_data[framekey] = θ_panel
                                 break
                     layout_data[panelkey] = hv.HoloMap(
                         # FitCollection.θ_curves already augments keys with split dims
@@ -1924,7 +1942,7 @@ class RSView(smttask.RecordStoreView):
                         kdims=frame_kdims
                     )
             layout = hv.NdLayout(layout_data, layout_kdims)
-        θ_curves = layout.cols(ncols).opts(hv.opts.Curve(width=panel_width, height=panel_height))
+        θ_curves = layout.opts(hv.opts.Curve(width=panel_width, height=panel_height))
 
         if ground_truth:
             if ground_truth is True:
@@ -1941,7 +1959,11 @@ class RSView(smttask.RecordStoreView):
                     {panelkey: hv.util.Dynamic(holomap_panel)
                      for panelkey, holomap_panel in θ_curves.items()},
                     kdims = θ_curves.kdims)
-
+        
+        θ_curves.label="Parameter dynamics"
+        θ_curves.opts(title="Parameter dynamics")
+        θ_curves.cols(ncols)
+                    
         return θ_curves
 
 
