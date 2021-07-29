@@ -77,7 +77,7 @@ from sinnfull.tasks import (CreateSyntheticDataset, CreateOptimizer, CreateModel
                             CreateFixedSegmentSampler, OptimizeModel)
 from sinnfull.rng import get_np_rng, get_shim_rng, draw_model_sample
 from sinnfull.optim import AlternatedSGD, Recorder
-from sinnfull.optim.convergence_tests import ConstantCost, DivergingCost
+from sinnfull.optim.convergence_tests import ConstantCost, ConstantParams, DivergingCost
 from sinnfull.utils import recursive_dict_update, get_scipy_dist
 
 from sinnfull import projectdir
@@ -409,9 +409,9 @@ if True and exec_environment == "notebook":
             D = get_scipy_dist(prior[θnm], idx=idx)
             low, high = D.a, D.b  # Scipy.stats stores domain bounds as `a`, `b` attributes
             # If domain is unbounded, ignore 5% on each end
-            if low == -np.inf:
+            if low < -1e8:  # Use numerical bounds, because in some cases inf is replaced with e.g 1e12
                 low = D.ppf(.05)
-            if high == np.inf:
+            if high > 1e8:
                 high = D.ppf(.95)
             # Ensure domain includes the actual sampled parameter
             if θval < low:
@@ -743,6 +743,7 @@ latents_recorder = LatentsRecorder(optimizer)
 # %%
 constant_cost = ConstantCost(cost_recorder='log L', tol=2**-7, n=12)
 diverging_cost = DivergingCost(cost_recorder='log L', maximize=True)
+constant_params = ConstantParams(param_recorder='Θ', rtol=2**-6, n=6)
 
 # %% [markdown]
 # ### `Optimize` Task
@@ -769,7 +770,7 @@ optimize = OptimizeModel(reason   =reason,
                          optimizer=optimizer,
                          step_kwargs=step_kwargs,
                          recorders=[logL_recorder, Θ_recorder, latents_recorder],
-                         convergence_tests      =[constant_cost, diverging_cost]
+                         convergence_tests      =[constant_cost & constant_params, diverging_cost]
                         )
 
 # %%

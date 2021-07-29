@@ -112,6 +112,58 @@ RecorderInterval = Union[conint(strict=True, ge=1),confloat(ge=1)]
 # TODO: A read-only Recorder, with reduced attributes
 
 # %%
+
+class RecorderList(LongList):
+    """
+    A specialized list which allows to index both step and value dimensions
+    from recorded values. For non-scalar recorded values, we often want a
+    particular component at all or many recorded steps.
+    
+    For example, suppose a recorder ``rec`` has a key ``'points`` with the
+    following recorded values:
+    ``[[0, 1], [0.866, 0.5], [1, 0], [0.866, -0.5]]``
+    (Corresponding to tuples :math:`\sin(x),  \cos(x)` for x = 0, π/3, π/2, 2π/3.)
+    We can retrieve the full list with
+    
+        >>> rec.points
+        [[0, 1], [0.866, 0.5], [1, 0], [0.866, -0.5]]
+        
+    If ``rec.points`` were a normal list, it would only be indexable along
+    the first dimension. To retrieve only the first (sin) component, one would
+    either have to filter the result, or first construct a NumPy array:
+    ``np.array(rec.points)[:,0]``. The latter approach is more convenient, but
+    entails a potential expensive array construction.
+    
+    `RecorderList` solves this problem by providing a NumPy like interface
+    which splits the first index and applies it separately. All of the
+    following indexing formats are possible:
+    
+        >>> rec.points[1:3]
+        [[0.866, 0.5], [1, 0]]
+        >>> rec.points[:, 0]
+        [0, 0.866, 1, 0.866]
+        >>> rec.points[:, 0:1]
+        [[0], [0.866], [1], [0.866]]
+        >>> rec.points[3, 1]
+        -0.5
+    
+    The implementation is essentially essentially the same as filtering the
+    returned list.
+    """
+    def __getitem__(self, key):
+        if isinstance(key, tuple):
+            stepkey, *valuekey = key
+            if len(valuekey) == 1:
+                valuekey = valuekey[0]
+            values = super().__getitem__(stepkey)
+            if isinstance(stepkey, slice):
+                return [v[valuekey] for v in values]
+            else:
+                return values[valuekey]
+        else:
+            return super().__getitem__(key)
+
+# %%
 ValueT = TypeVar('ValueT')
 class Recorder(GenericModel, Generic[ValueT]):
     __slots__ = ('orig_callback',)
@@ -351,13 +403,20 @@ class Recorder(GenericModel, Generic[ValueT]):
                 else:
                     return self.values[idx]
             else:
+                if self.keys is None and key in ("", self.name):
+                    # Special case: recorders without keys use their name as a key proxy
+                    # This allows a more standardized interface
+                    if isinstance(self.values, LongList):
+                        return self.values
+                    else:
+                        return LongList(self.values)
                 try:
                     i = self.keys.index(key)
                 except ValueError:
                     raise KeyError(f"Recorder does not contain the key '{key}'. "
                                    f"Recognized keys: {self.keys}")
                 else:
-                    return [v[i] for v in self.values]
+                    return RecorderList(v[i] for v in self.values)
 
     def __getattr__(self, attr):
         """Single traces can also be retrieved by attribute instead of by indexing."""
@@ -380,13 +439,16 @@ class Recorder(GenericModel, Generic[ValueT]):
     def trace(self, *keys, squeeze=True):
         """
         Return a tuple suitable for plotting, composed of (steps, (trace1, trace2)).
-        If there is only one key, the result is squeezed; i.e. one gets (steps, trace).
+        If there is only one key, and `squeeze` is True, the result is squeezed;
+        i.e. one gets (steps, trace).
         """
+        if len(keys) == 0:
+            keys = self.keys or [self.name]
         if len(keys) == 1 and squeeze:
             return self.steps, self[keys[0]]
         else:
             return self.steps, self[list(keys)]
-
+            
     def ready(self, step):
         """
         This function is called to determine whether to record.

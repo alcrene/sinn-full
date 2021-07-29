@@ -428,6 +428,11 @@ class OptimParams(ModelParams):
         if json_like(val, 'Array'):
             val = Array.validate(val)
         if not shim.isshared(val):
+            if shim.is_graph_object(val):
+                raise TypeError(f"Parameter values provided to {type(self).__qualname__} "
+                                "must either be shared variables or plain Python "
+                                "or NumPy values. Theano expressions are not "
+                                f"supported.\nReceived: {val}.")
             val = shim.shared(val, name=attr)
         super().__setattr__(attr, val)
 
@@ -466,8 +471,10 @@ class OptimParams(ModelParams):
                 # This model parameter is not optimized (probably constant)
                 continue
             if shim.isshared(self_v):
-                self_v.set_value(v)
+                self_v.set_value(v, borrow=borrow)
             else:
+                if not borrow:
+                    v = getattr(v, 'copy', lambda: copy.copy(v))()
                 setattr(self, k, v)
 
 # %% [markdown]

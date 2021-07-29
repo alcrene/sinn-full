@@ -353,10 +353,18 @@ def get_scipy_dist(pymc_dist: Union[pm.model.PyMC3Variable, pm.Distribution],
             mu, sigma = _shape_args(
             dist.shape, dist.dist.mu, dist.dist.sigma, idx=idx)
             return stats.norm(loc=mu, scale=sigma)
+        elif (isinstance(dist.dist, pm.TruncatedNormal)):
+            mu, sigma, lower, upper = _shape_args(
+                dist.shape,
+                dist.dist.mu, dist.dist.sigma, dist.dist.lower, dist.dist.upper,
+                idx=idx)
+            # truncnorm expects bounds to be in standardized form
+            a, b = (lower - mu) / sigma, (upper - mu) / sigma
+            return stats.truncnorm(a, b, loc=mu, scale=sigma)
         else:
             raise NotImplementedError(
-                f"Transformed Distribution {dist.transformed_used}⁻¹("
-                f"+ {dist.dist}) not yet supported.")
+                f"Transformed Distribution ({dist.transform_used})⁻¹("
+                f"{dist.dist}) not yet supported.")
 
     # Not a transformed => Proceed
     if isinstance(dist, pm.Normal):
