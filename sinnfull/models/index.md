@@ -60,7 +60,7 @@ One issue which occurs is that of proliferation: for each model, there can be mu
 Two other techniques used to reduce proliferation are the support for [arithmetic on objective functions](objective-functions) and [composite models](./composite_models/composite_models).
 :::
 
-Another way, which is especially useful to access definitions in a discoverable way, is to use _tags_. These are arbitrary strings associated with an object. Objects can then be self-assembled into [`TaggedCollection`](/sinnfull/tagging), which can be filtered by any tag combination. For example, if we have two Wilson-Cowan models named `WC1` and `WC2` with equivalent parameters, we might tag their default parameter set with `"WC1"`, `"WC2"` and `"default"`. A different parameter sets, meant to reproduce high gamma oscillations, might be tagged `"WC1"`, `"WC2"` and `"highgamma"`. The first set could then be retrieved with
+Another way, which is especially useful to access definitions in a discoverable way, is to use _tags_. These are arbitrary strings associated with an object. Objects can then be self-assembled into [`TaggedCollections`](/sinnfull/tags), which can be filtered by any tag combination. For example, if we have two Wilson-Cowan models named `WC1` and `WC2` with equivalent parameters, we might tag their default parameter set with `"WC1"`, `"WC2"` and `"default"`. A different parameter sets, meant to reproduce high gamma oscillations, might be tagged `"WC1"`, `"WC2"` and `"highgamma"`. The first set could then be retrieved with
 
 ```python
 from sinnfull.models.WC import paramsets

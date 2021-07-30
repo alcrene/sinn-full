@@ -67,7 +67,8 @@ class BokehOpts(metaclass=Singleton):
     # Static options
     hist_records: hv.Options = default_factory('hist_records', lambda:
         hv.opts.Histogram(
-            alpha=0.75, height=150, responsive=True))
+            alpha=0.75, height=150, responsive=True)
+        )
 
     ensemble_curve: hv.Options = default_factory('ensemble_curve', lambda:
         hv.opts.Curve(
@@ -162,6 +163,7 @@ class NameMap(dict):
         self.subscript_translator = subscript_translator
         super().__init__(**kwargs)
     def __getitem__(self, key):
+        orig_key = key
         while key:
             try:
                 return super().__getitem__(key)
@@ -169,8 +171,8 @@ class NameMap(dict):
                 if '.' in key:
                     key = key.split('.', 1)[1]
                 else:
-                    return key
-        return key
+                    return orig_key
+        return orig_key
     def get(self, name, default=None):
         if default is None:
             default = name

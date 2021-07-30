@@ -353,10 +353,11 @@ def get_init_key(record: RecordView) -> Union[StrTuple, str]:
     parameters (only the resulting initial parameter values are), we need
     to use a bit of hackery to extract it from the 'reason' string.
     """
-    key = re.search(r"Init params: (.*)", "\n".join(record.reason))[1]
-    if key[0] == '(':
-        key = StrTuple(eval(key))
-    return key
+    θkey = re.search(r"Init params: (.*)", "\n".join(record.reason))[1]
+    if θkey[0] == '(':
+        θkey = eval(θkey)
+    ηkey = tuple(record.get_param('optimizer.model.rng_key'))  # Serialized as a list
+    return StrTuple(θkey, ηkey)
 
 
 # %%
@@ -441,7 +442,7 @@ def make_slug(obj: Union[str, list, tuple, set],
     name_map = getattr(pretty_names, format)
     # Determine the brackets indicating each separable collection
     # (tested with list, tuple and set; may work with other collections)
-    collection_brackets = ''.join(str(list([1])).replace("1", "").replace(",","")  # `str(set())` does not produce the brackets
+    collection_brackets = ''.join(str(T([1])).replace("1", "").replace(",","")  # `str(set())` does not produce the brackets
                                   for T in separable_collections)
 
     if len(s.strip(collection_brackets)):
@@ -1123,7 +1124,7 @@ class FitData(BaseModel):
                      kdims=['step'], vdims=[param_dims.get(θname, θidx)],
                      group="Fit dynamics", label=self.make_param_label(θname, θidx)
                     )
-                 for θname in Θidcs for θidx in Θidcs[θname]},
+                 for θname, θidx in Θidcs},
                 kdims=θKey.kdims,
                 label=self.key_label
             )
@@ -1328,7 +1329,7 @@ class RSView(smttask.RecordStoreView):
         return list(self.split_dims.values())
 
     def splitby(self, split_fields: Optional[Sequence[str]] = None,
-                split_dims: Optional[Sequence[hv.Dimension]] = None,
+                split_dims: Dict[str, hv.Dimension] = None,
                 drop_unused_split_fields: bool = True,
                 get_field_value: Optional[Callable[[Any, str, Any], Any]] = None
                ) -> Dict[Tuple[str], RSView]:
@@ -1538,9 +1539,14 @@ class RSView(smttask.RecordStoreView):
         return table.opts(BokehOpts().table(nrows=nrows))
 
     @add_to('RSView')
-    def summary_hist(self, stat_field: str) -> hv.Overlay:
+    def summary_hist(self, stat_field: str) -> Union[hv.Histogram,hv.Overlay]:
         """
         `feature`: One of the features listed in `self.summary_fields`.
+        
+        Returns
+        -------
+        Histogram:          If the RSView is not split
+        Overlay[Histogram]: If the RSView is split
         """
         # Ensure that `feature` matches one of the values
         if stat_field not in self.summary_fields:
@@ -1550,7 +1556,11 @@ class RSView(smttask.RecordStoreView):
         if isinstance(hists, hv.Histogram):
             hists = [hists]
         hist_opts = BokehOpts().hist_records
-        return hv.Overlay([hist.opts(hist_opts) for hist in hists]).collate()
+        ov = hv.Overlay([hist.opts(hist_opts) for hist in hists]).collate()
+        if isinstance(ov, hv.Overlay):
+            # TODO: How to set this in viz.config ?
+            ov.opts(legend_position='right')
+        return ov
 
 # %% [markdown]
 # ### Loading fit data
