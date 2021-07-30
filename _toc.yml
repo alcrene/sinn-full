@@ -64,10 +64,6 @@
 
 - part: Diagnostic & tuning
   chapters:
-  - file: sinnfull/diagnostics/__init__
-    sections:
-    - file: sinnfull/diagnostics/one_step_cost
-    - file: sinnfull/diagnostics/utils
   - file: sinnfull/diagnose/index
     sections:
     - file: sinnfull/diagnose/index-correctness
@@ -91,6 +87,10 @@
       sections:
       - file: sinnfull/diagnose/Debugging_runtime_warnings
   - file: sinnfull/tune/index.md
+  - file: sinnfull/diagnostics/__init__
+    sections:
+    - file: sinnfull/diagnostics/one_step_cost
+    - file: sinnfull/diagnostics/utils
 
 - part: Other utilities
   chapters:
