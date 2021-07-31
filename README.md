@@ -52,9 +52,9 @@ This template is still in beta. If you find an example which doesn't work, pleas
 To ease reading, not all code cells are included in these generated pages – in particular, boilerplate imports are generally skipped. If you are trying to reproduce outputs, make sure to start from the actual source (*.py*) files !  
 :::
 
-## Relationship to Sinn
+## Relationship to *Sinn*
 
-[Sinn](https://github.com/mackelab/sinn) was built to address a specific goal: to construct differentiable objective functions from dynamical models, and thus allow their optimization with the same technology as that used to train neural networks. While it is possible to [use Sinn on its own](https://github.com/mackelab/sinn/tree/master/examples/Random-RNN), we found that it was difficult for users to translate this into workflows for their own problems. And with good reason – there is a lot more to a good machine learning workflow than just defining an objective function !
+[*Sinn*](https://github.com/mackelab/sinn) was built to address a specific goal: to construct differentiable objective functions from dynamical models, and thus allow their optimization with the same technology as that used to train neural networks. While it is possible to [use *Sinn* on its own](https://github.com/mackelab/sinn/tree/master/examples/Random-RNN), we found that it was difficult for users to translate this into workflows for their own problems. And with good reason – there is a lot more to a good machine learning workflow than just defining an objective function !
 
 *Sinn-full* is a complete workflow intended to get you (and ourselves !) started with a new *Sinn* project as quickly as possible. The intention is to use *Sinn-full* as a starting point, adding and changing elements as dictated by the requirements of the projects. And since *Sinn-full* includes examples that run out of the box, each change can be tested immediately, leading to faster and more confident development.
 
@@ -173,6 +173,55 @@ jb toc . && grep -v __init__ _toc.yml | grep -v setup | grep -v "/_" | grep -v c
 ```
 
 (The first command `jb toc .` creates the table of contents, and the other commands remove various undesired patters.) The resulting *_toc.yml* will likely still require some editing, for example to set the order of sections.
+
+## Contributing updates to this template
+
+Projects based on this template are likely to introduce new improvements and fixes to achieve their goals. When possible, we encourage users to propose these improvements as a pull-request to this template repository so that new projects may benefit. However, since a project's code base will have, by design, diverged from *Sinn-full*, this requires more care than usual for upstream contributions. (*Sinn-full* does not want your project-specific stuff ;-) ). The basic idea is to fork a separate copy, and backport the changes into this fork; for reference, the basic steps are documented below.
+
+:::{Note}  
+Because this process involves transferring code between diverged code bases, it will invariably require some manual intervention.  
+:::
+
+- Step 1 is to fork the *Sinn-full* repository (not “Use this template”). When you make changes to this fork, GitHub will propose to create a pull-request (PR).
+
+- Step 2 is to port the desired changes from the project (say “myproject”) back to *Sinn-full*. There are two ways to do this.
+
+  + *Easy way*: Update the *Sinn-full* files directly, by editing them and/or copying over changes from the project files. Once finished, commit and push the changes.
+
+    This is conceptually simple, but of course one must take care not to forget any desired changes (e.g. that extra import you added in another file). It works best for small changes and fixes.
+    
+  + *Hard way*: Use `git format-patch` to create a set of patches from your project, and `git am` to apply them to Sinn-full.
+  
+    This uses some rather advanced git commands, and if there are a lot of patches can require some effort to fix merge conflicts. The main benefit is that because the process is based on the project's commit history, it is less likely to forget changes. It also splits the change into logical commits, which can be easier to understand. Below is a suggested procedure; note that at intermediate steps the repository will be in an unclean state, so it is highly recommend to first understand the required git commands and especially how to reverse them.
+    
+    Recommendation: A useful pattern is to start the message of all commits in a project which should eventually be backport with the string `[backport]`.
+    
+    1. Create a new branch “patch-<date>”
+    2. `git rebase -i <commit>`, where `<commit>` is the hash of the earliest commit to be included in the set of patches
+    3. Use `drop`, `squash`, `fixup` to remove irrelevant commits and streamline the commit history.
+       Note that patch conflicts can be onerous to resolve, so in general, having fewer commits will save time.
+       Having a consistent tag identifying commits to be backported or squashed can greatly simplify this process.
+    4. `git format-patch` will create a set of patch files starting with 0001, 0002, etc.
+       Move these patch files to */tmp/patches*
+    5. The patch files will include paths with the project name; we need to replace it with “sinnfull”.
+       To do this
+       - Create a new directory */tmp/new-patches*.
+       - Apply the following sed command to replace all instances of “myproject” with “sinnfull” (take care not to accidentally replace other substrings)
+    
+             for file in `ls /tmp/patches`; do sed s:myproject:sinnfull:g /tmp/patches/$file > /tmp/new-patches/$file; done
+             
+    6. `git am --whitespace=warn --reject /tmp/new-patches/*`
+       - `--whitespace=warn` is suggested because Markdown files may use two trailing spaces to indicate a newline.
+       - `--reject` tells git the apply the patch hunks that succeeded, so that you only need to fix those that failed.
+       - The application of some of the patches will generally fail when the file they are applied to has also changed. This will generate .rej files listing the unapplied changes:
+         + Go through all .rej files and apply changes manually.
+         + As changes are applied, delete the .rej file
+         + When there are no .rej files left, stage the files (`git add`)
+         + `git am --continue`
+         + Repeat untill all patches are applied
+       - If you need to abort the process, you may want to use `git am --quit` instead of `git am --abort` to keep the changes that have already been applied.
+       
+- Step 3 is the usual procedure for a PR: push the changes to your forked Sinn-full repo, and open a PR via GitHub.
 
 
 **Everything below this line may be used as a starting point for a project's README**
