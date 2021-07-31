@@ -517,14 +517,29 @@ def model_name_from_selector(model_selector: dict) -> str:
     return model_str
 
 # %%
-def shift_time_t0(time_axis: 'sinn.TimeAxis', t0: float):
+def shift_time_t0(time_axis: Union['sinn.TimeAxis', 'sinn.History', 'sinn.Model'],
+                  t0: float):
     """
     Shift the values of `time_axis` such that their t0 is equal to `t0`.
     Noop if no shift is necessary.
     This modifies `time_axis` in-place.
     """
+    import sinn
+    # Special cases: if `time_axis` is actually a History or Model, shift the time axis they contain
+    if isinstance(time_axis, sinn.History):
+        hist = time_axis
+        shift_time_t0(hist.time, t0)
+        return
+    elif isinstance(time_axis, sinn.Model):
+        model = time_axis
+        shift_time_t0(model.time, t0)
+        for h in model.nonnested_history_set:
+            shift_time_t0(h, t0)
+        for m in model.nested_models.values():
+            shift_time_t0(m, t0)
+        return
     # Check if we need to do anything
-    if time_axis.t0 == t0:
+    elif time_axis.t0 == t0:
         return
     # Convert t0 to axis units, then remove the units (since the underlying
     # RangeMapping, and thus x0, doesn't have units)

@@ -33,7 +33,7 @@ import numpy as np
 import itertools
 import inspect
 from numbers import Integral
-from pydantic import BaseModel
+from pydantic import BaseModel, PrivateAttr
 import mackelab_toolbox as mtb
 import mackelab_toolbox.iotools
 from mackelab_toolbox.units import get_magnitude
@@ -107,6 +107,7 @@ class SegmentSampler(BaseModel, abc.ABC):
     trial_filter: dict=None
     rng_key     : Union[Tuple[int], int]
     rng         : RNGenerator=None
+    _ndraws     : int=PrivateAttr(0)
 
     class Config:
         arbitrary_types_allowed = True
@@ -159,6 +160,7 @@ class SegmentSampler(BaseModel, abc.ABC):
     def __iter__(self):
         return self
     def __next__(self):
+        self._ndraws += 1
         return self.draw(self.rng)
 
     def dict(self, *args, **kwargs):
@@ -208,7 +210,7 @@ class FixedSegmentSampler(SegmentSampler):
         if isinstance(time_unit, str):
             time_unit = ureg(time_unit)
         t0 = t0.astype(segment.time.dtype)  # Especially important if t0
-        T  =  T.astype(segment.time.dtype)  # and T are specified as ints
+        T  =  T.astype(segment.time.dtype)  # and T are given as ints
         t0 = get_magnitude(t0, in_units_of=time_unit)
         T  = get_magnitude(T,  in_units_of=time_unit)
         tslice = slice(t0, t0+T)
@@ -223,7 +225,8 @@ import xarray as xr
 from pydantic import validator, root_validator
 class RandomSegmentSampler(SegmentSampler):
     """
-    Return completely random data with the same shape as the given time array.
+    Return segments filled with random data with the same shape as the given
+    time array. All values are drawn independently.
     The data are draw by the specified distribution.
 
     Parameters
@@ -234,6 +237,7 @@ class RandomSegmentSampler(SegmentSampler):
         Variable names must match those in `var_shapes`.
         Variable distributions may be specified either as names or
         argument-less functions which return random numbers.
+        If specified as names, they must match an attribute name of `rng`.
 
     var_shapes: Dictionary of var name: var shape
         Variable names must match those in `var_dists`

@@ -184,7 +184,16 @@ from sinn.utils import unlocked_hists
 from sinnfull.utils import shift_time_t0
 
 DataType = Union[Dict[str,Union[sinn.History,np.ndarray]], xr.Dataset]
-def merge_data(timeaxis: sinn.TimeAxis, data: Union[DataType, Sequence[DataType]]) -> xr.Dataset:
+def merge_data(timeaxis: sinn.TimeAxis, data: Union[DataType, Sequence[DataType]]
+    ) -> xr.Dataset:
+    """
+    Combine time series data (either `~sinn.History` objects or plain NumPy
+    arrays) into an xarray Dataset.
+    Plain arrays are left-aligned with `timeaxis`.
+    Time axes of given histories should align (have the same t0 and time steps)
+    as `timeaxis`; they can however contain addition left padding and have a
+    different length.
+    """
 
     if isinstance(data, xr.Dataset):
         pass
@@ -287,16 +296,40 @@ def set_model(model,
     # (This sets cur_tidx back to -1, so do this before hist updates)
     model.update_params(params)
 
-    # TODO: assert data.time.dt == self.model.time.dt
-    # TODO: Match data.time to h.time ?
-    # Now set all histories to the values provided by `data`
-    t0idx = data.time.searchsorted(model.time.t0)
+    ## Ensure model and date time axes are aligned ##
+    data_dt = data.time.attrs.get('dt', None)
+    if data_dt is None:
+        data_dt = np.diff(data.time).mean() * model.time.unit
+    assert np.isclose(model.dt, data_dt)
+    t0 = model.time.t0
+    t0idx = data.time.searchsorted(t0)
         # Because `data` may include padding bins, and model.time typically
         # does not, t0 in the data and in model.time may not be the same.
+    if not np.isclose(data.time[t0idx].data*model.time.unit, t0):
+        # We can end up here if the model time axis wasn't shifted to align
+        # with the data
+        t0 = data.time[t0idx].data*model.time.unit
+    if t0idx < max_pad_left:
+        # Model t0 doesn't allow enough time bins for padding
+        Δ = max_pad_left - t0idx
+        t0 += Δ.plain*model.dt
+    if not np.isclose(t0, model.t0):
+        # We had to shift the model's t0, either because of lacking time bins,
+        # or because it doesn't align with the data.
+        t0idx = data.time.searchsorted(t0)
+        assert np.isclose(data.time[t0idx].data*model.time.unit, t0)
+        shift_time_t0(model, t0)
+        # shift_time_t0(model.time, t0)
+        # for m in model.nested_models.values():
+        #     shift_time_t0(m.time, t0)
+        # for h in model.history_set:
+        #     shift_time_t0(h.time, t0)
+        
+    ## Set all histories to the values provided by `data` ##
     for hname, hdata in data.data_vars.items():
         h = getattr(model, hname)
         with unlocked_hists(h):
-            h[:h.t0idx+K] = hdata[t0idx-h.pad_left:]
+            h[:h.t0idx+K] = hdata[t0idx-h.pad_left:t0idx+K]
                 # NB: By using AxisIndex objects here, we make use of
                 # AxisIndex's validation to ensure each history uses
                 # the right padding and goes exactly up to K.
@@ -319,6 +352,9 @@ def set_to_step(optimizer, fitdata, step, verbose=True):
        is an `θstep` matching each `ηstep`, the reconstructed state may differ
        slightly from the one which occurred during training.
     """
+    if fitdata.Θspace != 'optim':
+        raise ValueError("The provided FitData was not loaded with the option "
+                         "`Θspace='optim'`")
     if step == -1:
         step = fitdata.latents_evol.steps[-1]
     ηstep = fitdata.latents_evol.get_nearest_step(step)
@@ -331,7 +367,8 @@ def set_to_step(optimizer, fitdata, step, verbose=True):
              "the state which occurred during the optimization.\n"
              f"ηstep: {ηstep}\tθstep: {θstep}")
 
-    # Recover data at step ηstep -- Copied from FitData.η_curves
+    # Recover data at step ηstep -- copied from FitData.η_curves
+    # TODO: Use fitdata.get_observed_data
     model = optimizer.model
     if hasattr(fitdata.latents_evol, 'segment_keys'):
         segmentkey = fitdata.latents_evol.segment_keys[ηstepidx]
@@ -340,22 +377,25 @@ def set_to_step(optimizer, fitdata, step, verbose=True):
     if segmentkey:
         *trialkey, t0, stop, tstep = segmentkey
         dt = model.time.dt; dt = getattr(dt, 'magnitude', dt)
-        # Shift time arrays so they start with the same value as the data
+        # Find the number of padding time bins we need to initialize the observed hists
         max_pad_left = max(h.pad_left for h in optimizer.observed_hists.values())
-        t0 += max_pad_left * dt
+        # Shift time arrays so they start with the same value as the data
+        t0_minus_pad = t0
+        t0 = t0 + max_pad_left * dt
             # When the optimizer draws data segments, it reserves this `max_pad_left`
             # time bins to set the initial conditions (see `Optimizer.draw_data_segment`)
         if tstep:
             assert np.isclose(dt, tstep)
-        shift_time_t0(model.time, t0)
-        for h in model.history_set:
-            shift_time_t0(h.time, t0)
-        # Find the number of padding time bins we need to initialize the observed hists
-        Δ = max(h.pad_left for h in optimizer.observed_hists.values())
+        shift_time_t0(model, t0)
+        # shift_time_t0(model.time, t0)
+        # for m in model.nested_models.values():
+        #     shift_time_t0(m.time, t0)
+        # for h in model.history_set:
+        #     shift_time_t0(h.time, t0)
         # Retrieve the observed data for the corresponding slice
         observed_data = (fitdata.data_accessor.load(tuple(trialkey))
                          [[hnm for hnm in optimizer.observed_hists]]  # Keep only observed histories
-                         .sel(time=slice(t0 - Δ*dt, stop)))  # Index the corresponding time, adding enough padding so that the data's t0 is actually t0
+                         .sel(time=slice(t0_minus_pad, stop)))  # Index the corresponding time, adding enough padding so that the data's t0 is actually t0
                             # NB: multiplying dt like this is numerically fragile, but should be fine for small Δ (< 100 or so)
 
     latents = fitdata.latents_evol[ηstep]
@@ -365,6 +405,7 @@ def set_to_step(optimizer, fitdata, step, verbose=True):
     assert set(Θvals) <= set(fitdata.prior.optim_vars)
     Θvals_model = fitdata.prior.backward_transform_params(Θvals)
 
+    # TODO: Move to a function so these are are also applied with `set_model`
     # Set the optimizer's model
     set_model(optimizer.model,
               data=[latents, observed_data],

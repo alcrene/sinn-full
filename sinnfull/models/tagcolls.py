@@ -28,6 +28,8 @@ if __name__ == "__main__":
 
 # %% tags=["hide-input"]
 from typing import Type, Union, Optional, Set, List, Tuple, Dict
+from collections.abc import Collection, Callable
+from functools import partial
 from pydantic import StrictStr
 from sinnfull.parameters import ParameterSet
 from .base import ObjectiveFunction, Prior, Model
@@ -63,12 +65,24 @@ def get_objectives(objective_selectors: list) -> List[ObjectiveFunction]:
     for the different formats objective selectors can take.
     Accepts a list of objective selectors, and returns the objective
     corresponding to each. The returned objectives can be combined with `sum`.
+    
+    Objectives selectors are either tuples or sets of tags (not lists),
+    optionally including a dictionary of keyword arguments.
+    Objectives for submodels are indicated by placing them in nested dictionaries.
+    At any nesting level, multiple objectives can be defined by wrapping them
+    in a list.
+    
+    Objectives are returned as a flat list, independent of nesting level.
     """
     objective_list = []
     if not isinstance(objective_selectors, list):
         objective_selectors = [objective_selectors]
     for sel in objective_selectors:
-        if isinstance(sel, dict):
+        # FIXME: It's still a bit too inconvenient to always make an ObjectiveFunction,
+        #     so we sometimes still just pass a callable. But this will miss errors.
+        if isinstance(sel, Callable):
+            objective_list.append(sel)
+        elif isinstance(sel, dict):
             # Selector for submodel
             for submodel, subsel in sel.items():
                 if isinstance(subsel, (list, dict)):
@@ -80,13 +94,29 @@ def get_objectives(objective_selectors: list) -> List[ObjectiveFunction]:
                             # Assumes that ObjectiveFunction.submodel defaults to ""
                         objective_list.append(objective)
                 else:
+                    if isinstance(subsel, Collection):
+                        # dictionaries -> kwargs; everything else -> selector
+                        kwargs = {k:v for e in subsel if isinstance(e, dict) for k,v in e.items()}
+                        subsel = type(subsel)(e for e in subsel if not isinstance(e, dict))
                     objective = objectives[subsel].copy(deep=True)
+                    if kwargs:
+                        objective = type(objective)(
+                            func=partial(objective.func.func, **kwargs), tags=objective.tags)
                     if objective.submodel:
                         submodel += "."
                     objective.submodel = submodel + objective.submodel
                     objective_list.append(objective)
         else:
-            objective_list.add(objectives[sel].copy(deep=True))
+            if isinstance(sel, Collection):
+                # dictionaries -> kwargs; everything else -> selector
+                kwargs = {k:v for e in sel if isinstance(e, dict) for k,v in e.items()}
+                sel = type(sel)(e for e in sel if not isinstance(e, dict))
+            objective = objectives[sel].copy(deep=True)
+            if kwargs:
+                # TODO: Objective function should provide a `partial` method
+                objective = type(objective)(
+                    func=partial(objective.func.func, **kwargs), tags=objective.tags)
+            objective_list.append(objective)
                 # Copy required to avoid modifying the instance in objectives[…]
                 # (deep=True required to also copy objective.func)
     return objective_list

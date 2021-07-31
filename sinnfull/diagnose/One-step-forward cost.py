@@ -31,7 +31,7 @@
 # :::{caution}  
 # This test only verifies the consistency of the update and objective functions, as defined in the [*models*](../models) subpackage. No code from the optimizer is used; this includes the code involved in compiling the definitions in *models* into differentiable functions suitable for gradient-based optimization.
 #
-# Thus, passing this test is a necessary *but not sufficient* condition for the optimizer to evaluate the loss correctly. That said, since models are updated more often than optimizers, it should catch most errors.  
+# Thus, passing this test is a necessary *but not sufficient* condition for the optimizer to evaluate the loss correctly. That said, since models are changed much more frequently than optimizers, it should catch most errors.  
 # :::
 #
 # ::::{dropdown} Summary of the “one-step-ahead” test  
@@ -64,21 +64,40 @@
 # Beyond implementation correctness, the shape of this distribution can also help identify issues when fitting latents. For example, if the support of $P(X_{t+1} | X_t)$ is too small along a given component, then when simulations are far from observations, there may be little signal with which to compute gradients.  
 # ::::
 
+# %% [markdown]
+# **Possible reasons for failing this test**
+#
+# - The update function is inconsistent with the objective. Typically this is due to a bug in the implementation of one of the two functions.
+#   + This will be seen if the marginals of the objective function and the likelihood don't align.
+# - An ad-hoc objective is too tight.  
+#   When a true likelihood is not available, we may attempt a fit with an ad-hoc objective like a squared-error loss. This defines a kind of pseudo-likelihood (by taking the $\exp$ of the loss and normalizing). Fits can typically only converge to solutions where the stationary distributions has the same variance as the data, or this pseudo-likelihood – whichever is tighter. Hence it is important for ad-hoc objectives not to be tighter than the actual likelihood.  
+#   This is similar to how too tight priors can prevent any a fit from finding the ground truth values, while too broad prior simply require more data to do so.
+#   + Marginals of the objectives should be at least as broad as the empirical likelihood.
+#   + In this situation, the mode of the likelihood may appear to align with the ground truth, but still conserve a small mis-alignment. This can be detected by sampling enough points that some will find a higher value of the objective.
+#   + A more efficient test in this case may be the [latent gradient test](Check%20uniformity%20of%20gradients%20--%20example.ipynb).
+
 # %% [markdown] tags=["remove-cell"]
 # > **Note**  
-# > This test is intended for general testing of a model implementation. If you wish to apply it to investigate a particular situation which occurred during a recorded run, see the [“run data” variant](./One-step-forward%20cost%20--run%20data).  
+# > This test is intended for general testing of a model implementation. If you wish to apply it to investigate a particular situation which occurred during a recorded run, see the [“optimizer objective” variant](./One-step-forward%20cost%20--run%20data).  
 
 # %% tags=["remove-cell"]
 import sinnfull
-sinnfull.setup('numpy', view_only=True) # This test is around 2.5 faster with numpy vs theano
+sinnfull.setup('theano', view_only=True)
+    # Theano is faster, especially for large numbers of samples,
+    # but Numpy is typically easier to debug.
+    # Differences between the two should be considered bugs.
 
 # %% tags=["remove-cell"]
 import itertools
+import functools
 import numpy as np
+import pandas as pd
+import theano_shim as shim
 from mackelab_toolbox.utils import index_iter, GitSHA
 from sinnfull.models import models, TimeAxis, objectives, paramsets, get_objectives
 from sinnfull.diagnostics.one_step_cost import OneStepForwardLogp
 from sinnfull.viz import pretty_names
+from sinnfull.viz.utils import get_histdim_name
 
 # %% tags=["remove-input"]
 import holoviews as hv
@@ -121,15 +140,19 @@ model = models.ObservedDynamics(time=timeaxis,
 
 # %%
 test_t = 0.5
-num_test_samples = 1000
+num_test_samples = 4000
 
 # %% [markdown] tags=["remove-cell"]
 # Integrate the model. This will serve as the ground truth data.
 
 # %% tags=["remove-cell"]
+model.reseed_rngs(123)   # FIXME: This first integration isn't reproducible
 model.integrate('end')
 # Lock observed variables
 wc.u.lock()
+# Reset model Theano updates (in particular, reset the RNG to a different seed)
+model.theano_reset()
+model.reseed_rngs(246)
 
 # %% [markdown]
 # Run the test
@@ -144,20 +167,35 @@ obj_list = get_objectives({'dynamics': {'WilsonCowan', 'se'},
 # List format:
 # - One entry for each model-objective pair we want to test
 # - Each entry is composed of (model, objective, test label)
-obj_tests = [(model, obj_list[0], "wc_se"),
-             (model, obj_list[1], "gwn_logp"),
-             (model, sum(obj_list), "wc_se+gwn_logp")]
+obj_tests = [#(model, obj_list[0], "wc_se"),
+             #(model, obj_list[1], "gwn_logp"),
+             (model, sum(obj_list), "wc_se+gwn_logp")
+            ]
+
+# %%
+# If using Theano, compile the objective functions. This massively speeds up the test.
+if shim.config.library == 'theano':
+    new_tests = []
+    for model, obj, obj_name in obj_tests:
+        cgraph = obj(model, model.num_tidx)
+        cgraph = shim.graph.clone(cgraph, {model.num_tidx: model.curtidx_var})
+        f = shim.graph.compile([model.curtidx_var], cgraph)
+        @functools.wraps(obj)
+        def compiled_objective(model, k, f=f, model_compiled_against=model):
+            assert model is model_compiled_against
+            return f(k)
+        new_tests.append((model, compiled_objective, obj_name))
+    obj_tests = new_tests
 
 # %% [markdown] tags=["remove-cell"]
 # Store a ground truth value for each model used in a test, before the histories are cleared.
 
 # %% tags=["remove-cell"]
-# TODO: Create one function shared with kdims to create name from hist & index
 _models = {id(m): m for m, _, _ in obj_tests}  # Dictionary serves to remove duplicates
 ground_truth = {
     _model.name: {
-        f"{pretty_names.unicode.get(h.name)}{'_' if len(idx) else ''}{''.join(str(i) for i in idx)}"
-        : h[test_t+h.dt][idx]
+        get_histdim_name(h, idx)
+        : h.data[h.get_tidx(test_t, allow_rounding=True)+1][idx]
         for h in _model.unlocked_histories for idx in index_iter(h.shape)}
     for _model in _models.values()}
 
@@ -165,10 +203,19 @@ ground_truth = {
 # Store the value of the objective with the ground truth value, before the histories are cleared.
 
 # %%
+# FIXME: Assumes only one model
+k = model.get_tidx(test_t, allow_rounding=True)
+vals = ground_truth['ObservedDynamics']
+ξk = np.array([vals['ξ_0'], vals['ξ_1']])
+old_ξk = model.input.ξ.data[k+1]
+model.input.ξ[k+1] = ξk
+
 logp_gt = {}
 for _model, obj, obj_name in obj_tests:
     k = model.get_tidx(test_t, allow_rounding=True)
     logp_gt[(_model.name, obj_name)] = obj(model, k+1)
+    
+model.input.ξ[k+1] = old_ξk
 
 # %% tags=["remove-cell"]
 frames = {}
@@ -199,10 +246,10 @@ for _model, obj, obj_name in obj_tests:
               #hv.opts.VLine(color='#555555')
              )
     higher_than_gt = [('ground truth',
-                       *(np.round(gt[d.name], 4) for d in test.kdims),
-                       np.round(_logp_gt,3))]
+                       *(gt[d.name] for d in test.kdims),
+                       _logp_gt,3)]
     higher_than_gt += \
-       [(i, *np.round(s,4),np.round(l,3)) 
+       [(i, *s, l) 
         for i,s,l in zip(itertools.count(), test._samples, test._logps)
         if l >=  _logp_gt]
     higher_than_gt_frames[(_model.name, obj_name)] = \
@@ -238,7 +285,24 @@ hvframes
 # Check if there are any samples with higher likelihood than the ground truth values. While small deviations of the mode due to the prior may be expected, any moderate deviation may be indicative of a problem.
 
 # %% tags=["remove-input"]
-table_frames = hv.HoloMap(higher_than_gt_frames,
+# Round the values for a more compact display
+htgf = {}
+for k, table in higher_than_gt_frames.items():
+    df = table.data
+    if not isinstance(df, pd.DataFrame):
+        df = pd.DataFrame(df)
+    else:
+        df = df.copy()
+    for c in df.columns:
+        if c == 'index':
+            pass
+        elif c == 'log p':
+            df[c] = round(df[c], 3)
+        else:
+            df[c] = round(df[c], 4)
+    htgf[k] = hv.Table(df)
+
+table_frames = hv.HoloMap(htgf,
                           kdims=[hv.Dimension('model'),
                                  hv.Dimension('objective', label="objective function")])
 table_frames.opts(title="Sample points with likelihood higher than the ground truth")

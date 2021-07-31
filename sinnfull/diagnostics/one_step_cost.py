@@ -50,19 +50,21 @@ if __name__ == "__main__":
 # %%
 from typing import Union, Callable
 from warnings import warn
+import functools
 import numpy as np
 from scipy import integrate
 import pandas as pd
 from tqdm.auto import tqdm
 
-from mackelab_toolbox.utils import index_iter
+import theano_shim as shim
 from mackelab_toolbox import iotools
 from sinn.histories import TimeAxis
-from sinnfull.models import models, objectives, Model, ModelSpec, ObjectiveFunction
+from sinnfull.models import models, Model, ModelSpec, ObjectiveFunction, get_objectives
 import sinnfull.rng
-from sinnfull.viz import pretty_names
 from sinnfull.utils import add_to, add_property_to
 from sinnfull.tasks import CreateModel
+from sinnfull.viz import pretty_names
+from sinnfull.viz.utils import get_histdims
 
 # %%
 import holoviews as hv
@@ -75,10 +77,13 @@ if __name__ == "__main__":
 class OneStepForwardLogp:
     def __init__(self,
                  model: Union[Model, ModelSpec],
-                 logp: Union[ObjectiveFunction, 'ObjectiveSelector'],
+                 logp: Union[ObjectiveFunction, 'ObjectiveSelector', list],
                  T = 1.,
                  step = 0.01
                  ):
+        """
+        If `logp` is specified as a list, the sum of its elements is used.
+        """
         if not isinstance(model, Model):
             time = TimeAxis(min=0., max=T, step=step)
             model = CreateModel(time=time, model_selector=model, rng_key=((0,))
@@ -89,11 +94,25 @@ class OneStepForwardLogp:
         self.model = model
         
         # if not isinstance(logp, ObjectiveFunction):
+        # if not isinstance(logp, Callable):
+        #     if isinstance(logp, Callable):
+        #         raise TypeError("`logp` argument must be an ObjectiveFunction. "
+        #                         f"Received '{type(logp)}'")
+        #     logp = objectives[logp]
         if not isinstance(logp, Callable):
-            if isinstance(logp, Callable):
-                raise TypeError("`logp` argument must be an ObjectiveFunction. "
-                                f"Received '{type(logp)}'")
-            logp = objectives[logp]
+            logp = sum(get_objectives(logp))
+            
+            # If using Theano, compile the objective functions. This massively speeds up the test.
+            if shim.config.library == 'theano':
+                cgraph = logp(model, model.num_tidx)
+                cgraph = shim.graph.clone(cgraph, {model.num_tidx: model.curtidx_var})
+                f = shim.graph.compile([model.curtidx_var], cgraph)
+                @functools.wraps(logp)
+                def compiled_logp(model, k, f=f, model_compiled_against=model):
+                    assert model is model_compiled_against
+                    return f(k)
+                logp = compiled_logp
+            
         self.logp = logp
 
         self.set_random_init_condition()
@@ -131,11 +150,12 @@ class OneStepForwardLogp:
     @add_property_to('OneStepForwardLogp')
     def kdims(self):
         """Flattened history dimensions"""
-        return [
-            hv.Dimension(f"{pretty_names.unicode.get(h.name)}{'_' if len(idx) else ''}{''.join(str(i) for i in idx)}",
-                         label=pretty_names.wrap(
-                             pretty_names.get(h.name)+pretty_names.index_str(idx, prefix='_')))
-            for h in self.model.unlocked_histories for idx in index_iter(h.shape)]
+        return get_histdims(self.model.unlocked_histories)
+        # return [
+        #     hv.Dimension(f"{pretty_names.unicode.get(h.name)}{'_' if len(idx) else ''}{''.join(str(i) for i in idx)}",
+        #                  label=pretty_names.wrap(
+        #                      pretty_names.get(h.name)+pretty_names.index_str(idx, prefix='_')))
+        #     for h in self.model.unlocked_histories for idx in index_iter(h.shape)]
 
 # %% [markdown]
 # Sample the next step of the simulation multiple times.
@@ -144,7 +164,7 @@ class OneStepForwardLogp:
     @add_to('OneStepForwardLogp')
     def sample_next_step(self, N, keep_old_samples: bool=False):
         if keep_old_samples:
-            if len(self._samples) != len(self._parr):
+            if len(self._samples) != len(self._logps):
                 raise RuntimeError("`_samples` and `_parr` attribute have desynchronized.")
         else:
             self._samples = []
@@ -239,7 +259,7 @@ class OneStepForwardLogp:
             density_data = np.stack((centers, p_marginal_μ), axis=1)
 
             p_marginals[dim.name] = hv.Curve(
-                density_data, kdims=[dim], vdims=['p'], label="likelihood")
+                density_data, kdims=[dim], vdims=['p'], label="objective function")
 
         return hv.HoloMap(p_marginals, kdims=['dimension'])
 

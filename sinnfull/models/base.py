@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, ClassVar, Union, Optional, \
 from pydantic import validate_arguments
 import mackelab_toolbox.serialize as mtbserialize
 from mackelab_toolbox.typing import json_like
-from smttask.typing import PureFunction, CompositePureFunction
+from smttask.typing import PureFunction, PartialPureFunction, CompositePureFunction
 import operator
 import numpy as np
 import pymc3 as pm
@@ -874,7 +874,19 @@ class PureFunctionObjective(PureFunction):
         if self.submodel:
             model = getattr(model, self.submodel)
         return super().__call__(model, *args, **kwargs)
+        
+class PartialPureFunctionObjective(PartialPureFunction, PureFunctionObjective):
+    @classmethod
+    def validate(cls, value):
+        if isinstance(value, PureFunctionObjective):
+            return value
+        elif isinstance(value, Callable):
+            return PartialPureFunctionObjective(value)
+        else:
+            return PartialPureFunctionObjective(super().validate(value).func)
 
+PureFunctionObjective.Partial = PartialPureFunctionObjective
+    
 class CompositePureFunctionObjective(CompositePureFunction, PureFunctionObjective):
     @classmethod
     def validate(cls, value):
@@ -895,9 +907,11 @@ def pure_function_encoder_wrapper(func):
     return ("PureFunctionObjective", s, func.submodel)
 
 # Patch our custom types into the (de)serialization machinery
-mtbtyping.add_json_encoder(PureFunctionObjective, pure_function_encoder_wrapper,
-                           priority=1)
+mtbtyping.add_json_encoder(PureFunctionObjective, pure_function_encoder_wrapper, priority=1)
+mtbtyping.add_json_encoder(PartialPureFunctionObjective, pure_function_encoder_wrapper, priority=1)
 PureFunction.subtypes['PureFunctionObjective'] = PureFunctionObjective.validate
+PureFunction.subtypes['CompositePureFunctionObjective'] = CompositePureFunctionObjective.validate
+
 # HACK !!!!!! We reorder the json_encoders while preserving refs to the variable
 import sinnfull
 for k in list(sinnfull.json_encoders.keys()):
@@ -919,7 +933,7 @@ class ObjectiveFunctionMeta(BaseModelMeta):
                 return BaseModel.__getattr__(cls, attr)
             except AttributeError:
                 pass
-        if attr != 'tags' and attr in cls.tags:
+        if attr != 'tags' and attr in getattr(cls, 'tags', ()):
             return cls
         else:
             raise AttributeError(f"{cls} does "
@@ -1225,8 +1239,8 @@ class AccumulatedObjectiveFunction(ObjectiveFunction):
     disallowed_tags: ClassVar[set] = {'regularizer', 'global'}
 
     # Redefine __call__ so that it has the signature required by sinn.Model.accumulate
-    def __call__(self, model, k):
-        return self.func(model, k)
+    def __call__(self, model, k, **kwargs):
+        return self.func(model, k, **kwargs)
 
 # %% tags=["remove-cell"]
 # NB: We don't currently use regularizers, since priors are preferred for regularizing parameters,
@@ -1245,8 +1259,8 @@ class Regularizer(ObjectiveFunction):
     default_tags   : ClassVar[set] = {'regularizer'}
 
     ## Redefine __call__ so that it has the expected signature
-    def __call__(self, model):
-        return self.func(model)
+    def __call__(self, model, **kwargs):
+        return self.func(model, **kwargs)
 
     ## Validation
     @root_validator(pre=True)

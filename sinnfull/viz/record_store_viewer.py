@@ -97,7 +97,7 @@ from collections import namedtuple
 from typing import (Optional, ClassVar, Union, Iterable, Generator, Any,
                     Sequence, List, Callable, Dict, Tuple)
 from dataclasses import dataclass, field
-from pydantic import BaseModel, PrivateAttr
+from pydantic import BaseModel, PrivateAttr, constr
 from smttask.view import RecordView
 from sinn import Model
 from sinn.utils.pydantic import initializer
@@ -716,6 +716,7 @@ class FitData(BaseModel):
     record       : RecordView
     model_spec   : ModelSpec=None
     model_name   : str=None
+    Θspace       : constr(regex="^model$|^optim$")="model"
     Λlabel       : str="Λ?"
     Λ            : dict={}
     logL_evol    : Recorder=None
@@ -796,14 +797,14 @@ class FitData(BaseModel):
             f"latents_evol={'Recorder(…)' if isinstance(self.latents_evol, Recorder) else self.latents_evol}"
             )) + ')'
 
-    def __init__(self, *, θspace='model', **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
         # Parameters are recorded in optimization space, but it is preferred
         # to display them in model space.
         # So we create a new recorder with converted values
         # TODO: Can't we move this to the validator for Θ_evol ?
-        assert θspace in ['model', 'optim']
-        if θspace == 'model':
+        # assert θspace in ['model', 'optim']
+        if self.Θspace == 'model':
             optimθrecorder = self.Θ_evol
             optim_names = optimθrecorder.keys
             model_names = list(self.prior.model_vars)
@@ -949,19 +950,19 @@ class FitData(BaseModel):
             if isinstance(segment_sampler, dict):
                 if TaskDesc.looks_compatible(segment_sampler):
                     # Replace sampler's DataAccessor with one in registry, which is shared with different fits
-                    assert 'inputs.data' in segment_sampler
-                    segment_sampler['inputs']['data'] = self.target_data
+                    assert 'inputs' in segment_sampler and 'data' in segment_sampler['inputs']
+                    segment_sampler['inputs']['data'] = self.data_accessor
                     # Now create the sampler from the task description
                     segment_sampler = Task.from_desc(segment_sampler)
                     segment_sampler = segment_sampler.run()
                 elif 'data' in segment_sampler:
-                    segment_sampler['data'] = self.target_data
+                    segment_sampler['data'] = self.data_accessor
                     segment_sampler = SegmentSampler(**segment_sampler)
                 else:
                     raise ValueError("Segment sampler description is not compatible with "
                                      "either Task or SegmentSampler serization formats")
             elif isinstance(segment_sampler, SegmentSampler):
-                # Probably all we need to do is set segment_sampler.data = self.target_data
+                # Probably all we need to do is set segment_sampler.data = self.data_accessor
                 # When/if this is needed we'll do that
                 raise NotImplementedError("There was no use case during development, "
                                           "but it should not be hard to implement this.")
@@ -972,19 +973,61 @@ class FitData(BaseModel):
 
     def ground_truth_η(self, trial=None):
         """
+        .. Note:: In most cases, you will want to use `get_observed_data`
+           instead of this function.
+           
         Retrieve the target data for the given trial.
         If no trial is given, the first trial is used.
+        Returns the entire data trace, not just the segment used in the fit.
         """
         if trial is None:
             trial = self.data_accessor.trials.trial.data[0]
         return self.data_accessor.load(trial)
-
-    def ground_truth_Θ(self, param_index: int=0):
+        
+    # TODO: Use latents_evol.segment_keys instead of a loop
+    def get_observed_data(self, step: int=1):
         """
+        Return the observed data used for the `n`-th iteration step.
+        
+        .. Remark:: Despite the name, this also returns unobserved data if
+           they are available (as in the case of the SyntheticDataAccessor).
+        
+        .. Note:: This works by repeatedly sampling the SegmentSampler `step`
+           times. Since this simulates (in the case of a SyntheticDataAccessor)
+           and loads each segment, this could quickly becomes wasteful as soon
+           as there is more than one data segment.
+           It would not be hard though to add to SegmentSampler the
+           option to advance the RNG without loading data; we just haven't had
+           a need for this yet.
+        """
+        segmentkey = self.latents_evol.segment_keys[step]
+        *trialkey, t0, stop, tstep = segmentkey
+        return (self.data_accessor.load(tuple(trialkey))
+                .sel(time=slice(t0, stop)))
+
+    def ground_truth_Θ(self, param_index: int=0, split: bool=True, Θspace=None):
+        """
+        .. Note:: Always returns the ground truth in model (not optimization
+           space). This is because if we read the ground truth from the Trial
+           object, we only have the model parameters, and those cannot be
+           inverted to optimization space.
+           So for consistency, we always return model parameters.
+        
+        Parameters
+        ----------
         param_index: If there are multiple data sets, this parameter allows
             to specify which one (indexing them sequentially from 0).
+        split: Whether to split array parameters into scalars.
+            The default ``True`` is meant for plotting applications, to allow
+            making one plot per parameter component.
+            The value ``False`` is more convenient for further computation.
+            This also affects the returned keys:
+            - Keys if `split`=True:  (pretty θ name, StrTuple)
+            - Keys if `split`=False: (θ name)
         """
-        gt_key = self.ground_truth_key(param_index)
+        if Θspace is None:
+            Θspace = self.Θspace
+        gt_key = self.ground_truth_key(param_index) + (Θspace,)
         if param_index not in self._ground_truth_Θ:
             synth_data = get_task_param(self.record, "optimizer.data_segments.data")
             if isinstance(synth_data, dict):
@@ -994,34 +1037,47 @@ class FitData(BaseModel):
                     synth_data = DataAccessor.from_desc(synth_data)
             assert isinstance(synth_data, (smttask.Task, DataAccessor))
             if isinstance(synth_data, DataAccessor):
+                if Θspace != "model":
+                    raise ValueError(
+                        "The task description defines the data as with a "
+                        "SyntheticDataAccessor instance. In contrast to a "
+                        "CreateSyntheticDataset Task, this only provides the "
+                        "ground truth parameters in model space, not optimization "
+                        "space. However, this FitData object is configured to "
+                        "return parameters in optimization space. Hence the "
+                        "ground truth parameters cannot be returned")
+                        # TODO: Option to return the model space params anyway ?
                 ground_truth = synth_data.trials.trial.data[param_index].params
             elif isinstance(synth_data, sinnfull.tasks.CreateSyntheticDataset):
                 #ground_truth = synth_data.param_generator(synth_data.param_keys[param_index]).get_values()
                 ground_truth = mtb.typing.IndexableNamespace(
-                    **synth_data.prior.random(synth_data.param_keys[param_index]))
+                    **synth_data.prior.random(
+                        synth_data.param_keys[param_index], space=Θspace))
             else:  # Any other Task, in particular those loading experimental data
                 ground_truth = {}
             if ground_truth:
                 normalize = getattr(self.model_class, 'remove_degeneracies', None)
                 if normalize:
                     ground_truth = normalize(ground_truth)
-                #ground_truth = synth_data.prior.forward_transform_params(ground_truth)
-                # Convert to a flattened dict with same keys as θ_curves
-                Θidcs = self.Θidcs
-                # Casting to np.array ensures this works even with scalar parameters
-                # Dict keys must match those of the θ_curves dict
-                ground_truth = {
-                    (pretty_names.get(θname), StrTuple(θidx)): np.array(ground_truth[θname])[θidx]
-                     for θname in Θidcs for θidx in Θidcs[θname]}
             # `gt_key` corresponds to 'init_key',
             self._ground_truth_Θ[gt_key] = ground_truth
-        return self._ground_truth_Θ[gt_key]
+        else:
+            ground_truth = self._ground_truth_Θ[gt_key]
+        if split:
+            # Convert to a flattened dict with same keys as θ_curves
+            Θidcs = self.get_Θidcs(ground_truth.keys(),
+                                   (θ.shape for θ in ground_truth.values()))
+            # Casting to np.array ensures this works even with scalar parameters
+            # Dict keys must match those of the θ_curves dict
+            ground_truth = {
+                (pretty_names.get(θname), StrTuple(θidx)): np.array(ground_truth[θname])[θidx]
+                 for θname, θidx in Θidcs}
+        return ground_truth
 
     @property
-    def Θidcs(self):
-        return {θname: list(mtb.utils.index_iter(np.array(θval).shape))
-                for θname, θval in zip(self.Θ_evol.keys, self.Θ_evol.values[0])}
-
+    def Θidcs(self) -> Generator[Tuple[str,Tuple[int,...]]]:
+        return self.get_Θidcs(self.Θ_evol.keys,
+                             (θ.shape for θ in self.Θ_evol.values[0]))
 
 # %% [markdown]
 # ### Plotting fit results

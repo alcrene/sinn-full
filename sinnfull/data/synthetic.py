@@ -348,7 +348,7 @@ class SyntheticDataAccessor(BaseAccessor):
         model = self.model
 
         # Set model parameters to those of the trial
-        model.update_params(trial.params)
+        model.update_params(trial.params)  # `update_params` calls `model.clear()`
         for histname, init_val in trial.init_cond.items():
             hist = model.nested_histories[histname]
             hist[:hist.t0idx] = init_val
