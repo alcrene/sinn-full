@@ -140,7 +140,7 @@ params_objective = {'input': {'GaussianWhiteNoise', 'log L'},
                     'observations': {'GaussObs', 'log L'}}
 latents_objective = {'observations': {'GaussObs', 'log L'}}
 prior_spec = ParameterSet(
-    {'input': {'selector': {'GWN', 'floored'},
+    {'input': {'selector': {'GWN', 'default'},
                'kwds': dict(mu_mean=[-0.25, -0.5],
                             logsigma_mean=[-1., -1.],
                             M=2)},
@@ -155,7 +155,7 @@ prior_spec = ParameterSet(
 
 # Draw data parameters from tighter distributions than the priors
 # This reflects the practice of making the priors broader to avoid unduly
-# influencing the fit (Gaussian priors tend to start shaping the posterier
+# influencing the fit (Gaussian priors tend to start shaping the posterior
 # even for parameter values only moderately away from their mean).
 synth_param_spec = prior_spec.copy()  # Requires sinnfull.ParameterSet
 synth_param_spec.update({'input.kwds.mu_std': 1.,         # Tip: Use dotted notation to avoid
@@ -388,12 +388,24 @@ if True and exec_environment == "notebook":
 # %%
 if True and exec_environment == "notebook":
     panels = []
-    #prior_var_names = [
-    #    θnm for θnm, θ in synth_param_dist.model_vars.items()
-    #    if not isinstance(θ, pm.model.DeterministicWrapper)]  # FIXME: detect Constant statt Deterministic
-    #θvalset = ParameterSet(seg_iter.data.trials.trial.data[0].params.as_dict())
     θvalset = synth_param_dist.random((param_rngkey,0), space='optim')
-    prior_var_names = list(θvalset)
+    # Remove parameters that were sampled but are not actually optimized
+    prior_var_names = [θnm for θnm in θvalset if θnm in prior.optim_vars]
+    non_optim_vars = {θnm: synth_param_dist[θnm] for θnm in θvalset if θnm not in prior_var_names}
+    if non_optim_vars:
+        # For parameters that are sampled but not optimized, create a table comparing their sampled and true values
+        model_θvalset = synth_param_dist.random((param_rngkey,0), space='model')
+        non_optim_vals = {}
+        for θnm, optim_θ in non_optim_vars.items():
+            for nm, model_var in synth_param_dist.model_vars.items():
+                if optim_θ in shim.graph.symbolic_inputs(model_var):
+                    break
+            else:
+                nm = model_var = None
+            if nm:
+                # Assumption: if we are not fitting θ, it is because it is fixed / deterministic
+                non_optim_vals[nm] = {'true value': model_θvalset[nm],
+                                      'prior value': prior[nm].eval()}
     for θnm in prior_var_names:
         if isinstance(prior[θnm], pm.model.DeterministicWrapper):
             logger.info(f"Skipping {θnm}: not a random variable.")
@@ -434,6 +446,11 @@ if True and exec_environment == "notebook":
          .opts(hv.opts.Curve(framewise=True, width=200, height=200),
                hv.opts.VLine(color='orange'))
     display(fig)
+    if non_optim_vars:
+        import pandas as pd
+        df = pd.DataFrame(non_optim_vals).T
+        print("Non-optimized parameters:")
+        display(df)
 
 # %% [markdown]
 # ## Set the model parameters
@@ -836,15 +853,8 @@ if True and exec_environment == "notebook":
 if exec_environment == "notebook":
     result = optimize.run(record=False, recompute=True)
 
-# %%
-
-# %% [raw]
-#
-
 # %% [markdown]
 # ---
 
 # %%
 # %debug
-
-# %%
