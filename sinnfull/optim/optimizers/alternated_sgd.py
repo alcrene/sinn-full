@@ -72,7 +72,7 @@ from sinn.diskcache import DiskCache
 import sinnfull.utils as utils
 from sinnfull.sampling import sample_batch_starts, SegmentSampler
 from sinnfull.parameters import ParameterSet
-from sinnfull.utils import add_to, add_property_to
+from sinnfull.utils import add_to, add_property_to, shift_time_t0
 from sinnfull.models.base import Prior, AccumulatedObjectiveFunction
 from sinnfull.optim.base import Optimizer, OptimParams, OptimizerStatus, clip_gradients
 from sinnfull.optim.convergence_tests import ConvergenceTest
@@ -567,6 +567,8 @@ class AlternatedSGD(Optimizer):
 # ::::
 
     # %%
+    # TODO: Move to Optimizer: a) generally useful and b) some utilities assume
+    #       the particular behaviour wrt initial conditions
     @add_to('AlternatedSGD')
     def draw_data_segment(self):
         """
@@ -580,7 +582,7 @@ class AlternatedSGD(Optimizer):
         **Side-effects**
         If the drawn segment is different from the current one:
 
-        - Will model histories
+        - Will update model histories
         - Will update `_current_segment_key`
 
         **Treatment of initial conditions**
@@ -605,6 +607,7 @@ class AlternatedSGD(Optimizer):
         if segmentkey != current_segment_key:
             # Changing the data segment requires:
             #   - Replacing all the data in the observed hists with that in the segment
+            #   - Shifting all time arrays so that they align with the new data
             #   - Loading the current estimate of the latent history for that segment.
             # NB: We need to use some of the observed data to set the
             #     initial conditions (ICs) of the observed histories.
@@ -618,7 +621,8 @@ class AlternatedSGD(Optimizer):
                 # The number of time bins we have
                 # Some of these will be used to set ICs (i.e. the padding bins)
             K = K_padded - max_pad_left
-                # The unpadded number of time bins
+            self.Kshared.set_value(K.plain)
+                # The unpadded number of time bins; self.Kshared underlies the SymbolicIndex self.K
             # Assert that the data and model have the same time step
             dt = self.model.time.dt; dt = getattr(dt, 'magnitude', dt)
             assert np.isclose(np.diff(data.time[:2]), dt)
@@ -746,7 +750,7 @@ class AlternatedSGD(Optimizer):
 
         #### Do parameter updates ####
         if update_params and not self.status & OptimizerStatus.ParamsConverged:
-            Kθb=self.Kθb.plain.eval(); Kθr=self.Kθr.plain.eval();
+            Kθb=self.Kθb.eval(); Kθr=self.Kθr.eval();
             Nθb=self.Nθb;
             bθ = sample_batch_starts(K, Kθb+Kθr, Nθb, rng=rng)
             bθ.sort()
@@ -761,7 +765,7 @@ class AlternatedSGD(Optimizer):
         #### Do latent updates ####
         if update_latents and hasattr(self, 'update_η') and not self.status & OptimizerStatus.LatentsConverged:
             # Second condition because if there are no latent hists, we don't compile update_η
-            Kηb=self.Kηb.plain.eval(); Kηr=self.Kηr.plain.eval();
+            Kηb=self.Kηb.eval(); Kηr=self.Kηr.eval();
             Nηb=self.Nηb;
             self.model.integrate(upto=self.current_segment_range[1], histories='all')  # range is inclusive
             if self.batched_latents:
@@ -1070,7 +1074,7 @@ class AlternatedSGD(Optimizer):
         assert self.model.cur_tidx < self.model.tnidx
 
         ## Clear all unlocked data after k
-        self.model.clear(after=shim.eval(k.plain))  # eval(k) b/c clear requires a numeric time index
+        self.model.clear(after=shim.eval(k))  # eval(k) b/c clear requires a numeric time index
 
         # Check that locked histories are ahead by at least 1 time bin
         if list(self.model.unlocked_statehists):
@@ -1118,6 +1122,7 @@ class AlternatedSGD(Optimizer):
                     hyperθ[cat][nm] = shim.shared(val, name=nm)
 
         ## Create placeholder batch size variables ##
+        # _k_vars (and the properties below) was a workaround since before PrivateAttr was added to
         # Do this after integration, filling & locking, to ensure histories are synchronized
         model = self.model
         modelstr = f"({type(model).__name__})"
@@ -1125,22 +1130,28 @@ class AlternatedSGD(Optimizer):
         self._k_vars.Kshared = shim.shared(  # -> total length
             model.time.index_nptype(1), name=f"K ({modelstr})")  # Value is updated in draw_data_segment
         self._k_vars.K = model.time.Index.Delta(self._k_vars.Kshared)
-        self._k_vars.Kθb = model.time.index_interval(self.fit_hyperparams['Tθb']*model.time.unit)
-        self._k_vars.Kθr = model.time.index_interval(self.fit_hyperparams['Tθr']*model.time.unit)
-        self._k_vars.Kθb = model.time.Index.Delta(shim.shared(self.Kθb.plain, name=f"Kθb ({modelstr})"))  # -> Kθb_symb
-        self._k_vars.Kθr = model.time.Index.Delta(shim.shared(self.Kθr.plain, name=f"Kθr ({modelstr})"))  # -> Kθr_symb
+        Kθb = model.time.index_interval(self.fit_hyperparams['Tθb']*model.time.unit)
+        Kθr = model.time.index_interval(self.fit_hyperparams['Tθr']*model.time.unit)
+        self._k_vars.Kθb = model.time.Index.Delta(shim.shared(Kθb.plain, name=f"Kθb ({modelstr})"))  # -> Kθb_symb
+        self._k_vars.Kθr = model.time.Index.Delta(shim.shared(Kθr.plain, name=f"Kθr ({modelstr})"))  # -> Kθr_symb
         self._k_vars.Kθb_symb = shim.tensor(Kθb.plain, name="Kθb")  # Symbolic variable associated to a shared variable
         self._k_vars.Kθr_symb = shim.tensor(Kθr.plain, name="Kθr")
-        self._k_vars.Kηb = model.time.index_interval(self.fit_hyperparams['Tηb']*model.time.unit)
-        self._k_vars.Kηr = model.time.index_interval(self.fit_hyperparams['Tηr']*model.time.unit)
-        self._k_vars.Kηb = model.time.Index.Delta(shim.shared(self.Kηb.plain, name=f"Kηb ({modelstr})"))  # -> Kηb_symb
-        self._k_vars.Kηr = model.time.Index.Delta(shim.shared(self.Kηr.plain, name=f"Kηr ({modelstr})"))  # -> Kηr_symb
+        Kηb = model.time.index_interval(self.fit_hyperparams['Tηb']*model.time.unit)
+        Kηr = model.time.index_interval(self.fit_hyperparams['Tηr']*model.time.unit)
+        self._k_vars.Kηb = model.time.Index.Delta(shim.shared(Kηb.plain, name=f"Kηb ({modelstr})"))  # -> Kηb_symb
+        self._k_vars.Kηr = model.time.Index.Delta(shim.shared(Kηr.plain, name=f"Kηr ({modelstr})"))  # -> Kηr_symb
         self._k_vars.Kηb_symb = shim.tensor(Kηb.plain, name="Kηb")
         self._k_vars.Kηr_symb = shim.tensor(Kηr.plain, name="Kηr")
 
     @add_property_to('AlternatedSGD')
     def k(self):
         return self._k_vars.k
+    @add_property_to('AlternatedSGD')
+    def K(self):
+        return self._k_vars.K
+    @add_property_to('AlternatedSGD')
+    def Kshared(self):
+        return self._k_vars.Kshared
     @add_property_to('AlternatedSGD')
     def Kθb(self):
         return self._k_vars.Kθb
@@ -1233,7 +1244,7 @@ class AlternatedSGD(Optimizer):
             raise AssertionError("There are pending symbolic updates.")
         Kθb_symb = self.Kθb_symb
         Kθr_symb = self.Kθr_symb
-        K  = self.model.cur_tidx - self.model.t0idx + 1
+        # K  = self.model.cur_tidx - self.model.t0idx + 1
 
         #### Lock latent histories ####
         for h in self.latent_hists.values():
@@ -1299,7 +1310,7 @@ class AlternatedSGD(Optimizer):
         #        "parameters, but they don't appear in the graph of the loss: "
         #        f"{set(self.params) - set(symb_inputs)}.")
 
-        #### Compute parameter updates with Adam ####
+        #### Create parameter update graphs with Adam ####
         param_optimizer = self.param_optimizer
         if param_optimizer is None:
             param_optimizer = self.default_param_optimizer
@@ -1315,6 +1326,14 @@ class AlternatedSGD(Optimizer):
                                "not modify `shim`'s global update dictionary.\n"
                                f"Added or modified variables: {new_upds+chgd_upds}.")
 
+        # #### DEBUG: Make all inputs output their value
+        # # TODO: Print to file instead of stdout (needs to keep file handle open)
+        # named_inputs = [v for v in shim.graph.symbolic_inputs(batch_logp)
+        #                 if v.name]
+        # vars_which_print = {v: shim.print(v, message_prefix="logp inputs - ")
+        #                     for v in named_inputs + [self.model.curtidx_var, Kθb_symb]}
+        # batch_logp = shim.graph.clone(batch_logp, replace=vars_which_print)
+
         #### Compile logp function ####
         # from theano.compile.nanguardmode import NanGuardMode         # DEBUG
         logp_f = shim.graph.compile(
@@ -1324,10 +1343,12 @@ class AlternatedSGD(Optimizer):
             # mode=NanGuardMode(nan_is_error=True, inf_is_error=True)  # DEBUG
         )
         k0 = self.model.t0idx
-        def logp(k0=k0, K=K):
+        def logp(k0=k0, K=None):
             """
             Return the average logp per time point (i.e. logp(k0:k0+K)/K).
             Taking the average makes logp comparable across batch sizes.
+            The default for `K` is all of the data, minus the number of padding
+            time bins required for initial conditions.
             """
             # Typically the forward accumulator is offset by 1; shift k0 accordingly
             if not hasattr(self.logp_params, 'start_offset'):
@@ -1336,6 +1357,10 @@ class AlternatedSGD(Optimizer):
                     "to have been created with the `sinn.models.Model.accumulate` "
                     "decorator.")
             k0 -= self.logp_params.start_offset
+            if K is None:
+                K = self.Kshared.get_value()
+                    # self.Kshared is the shared value underlying self.K
+                    # It is updated in draw_data_segment
             return logp_f(k0, K) / K
         object.__setattr__(self, 'logp', logp)
 
@@ -1619,9 +1644,9 @@ class AlternatedSGD(Optimizer):
         for upd_dict in latent_updates.values():
             for num_data, upd in upd_dict.items():
                 upd_dict[num_data] = shim.graph.clone(
-                    upd, replace={k.plain:   self.model.curtidx_var,
-                                  Kηb.plain: Kηb_symb,
-                                  Kηr.plain: Kηr_symb}
+                    upd, replace={k:   self.model.curtidx_var,
+                                  Kηb: Kηb_symb,
+                                  Kηr: Kηr_symb}
                                   #self.model.batchsize_var: Kηb_sym+Kηr_symb})
                 )
 
