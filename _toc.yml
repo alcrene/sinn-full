@@ -1,6 +1,8 @@
-- file: README
+format: jb-book
+root: README
 
-- part: Workflow components
+parts:
+- caption: Workflow components
   chapters:
   - file: sinnfull/data/index
     sections:
@@ -45,7 +47,7 @@
     - file: sinnfull/tasks/base
     - file: sinnfull/tasks/analysis
 
-- part: Workflows
+- caption: Workflows
   chapters:
   - file: sinnfull/workflows/index
     sections:
@@ -53,7 +55,7 @@
     - file: sinnfull/workflows/workflow_parameters
     - file: sinnfull/workflows/Optimize_WF_template
 
-- part: Visualization
+- caption: Visualization
   chapters:
   - file: sinnfull/viz/index
     sections:
@@ -66,7 +68,7 @@
     sections:
     - file: sinnfull/view/Result viewer
 
-- part: Diagnostic & tuning
+- caption: Diagnostic & tuning
   chapters:
   - file: sinnfull/diagnose/index
     sections:
@@ -96,13 +98,13 @@
     - file: sinnfull/diagnostics/one_step_cost
     - file: sinnfull/diagnostics/utils
 
-- part: Other utilities
+- caption: Other utilities
   chapters:
   - file: sinnfull/sampling
   - file: sinnfull/rng
   - file: sinnfull/utils
 
-# - part: Algorithmic verifications
+# - caption: Algorithmic verifications
 #   chapters:
 #   - file: sinnfull/algorithm_tests/index
 #     sections:
