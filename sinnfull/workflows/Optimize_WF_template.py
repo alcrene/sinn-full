@@ -849,7 +849,7 @@ if True and exec_environment == "notebook":
 # # (compile functions with `shim.graph.compile(…, mode='guard:nan,inf,big')`)
 # ```
 
-# %%
+# %% tags=["skip-execution"]
 if exec_environment == "notebook":
     result = optimize.run(record=False, recompute=True)
 

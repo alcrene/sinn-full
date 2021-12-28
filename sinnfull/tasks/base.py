@@ -9,9 +9,9 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (comp)
+#     display_name: Python (wcml)
 #     language: python
-#     name: comp
+#     name: wcml
 # ---
 
 # %% [markdown]

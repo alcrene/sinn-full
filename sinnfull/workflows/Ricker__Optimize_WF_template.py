@@ -550,7 +550,7 @@ if exec_environment == "notebook":
 # The call to `run()` will recurse through the workflow tree, executing all required tasks. Since `OptimizeModel` is a `RecordedTask`, its result is saved to disk so that it will not need to be run again in the future if called with the same parameters.
 # (To force a rerun, e.g. if the model code changed, one can execute `optimize.run(recompute=True)`.)
 
-# %%
+# %% tags=["skip-execution"]
 if exec_environment == "notebook":
     result = optimize.run(record=False, recompute=True)
 

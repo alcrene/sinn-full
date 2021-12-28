@@ -8,9 +8,9 @@
 #       format_name: light
 #       format_version: '1.5'
 #   kernelspec:
-#     display_name: Python (comp)
+#     display_name: Python (sinnfull)
 #     language: python
-#     name: comp
+#     name: sinnfull
 # ---
 
 # # Workflow parameters

@@ -29,9 +29,6 @@
 #   - Plotting the likelihood over those parameters. Non-convex profiles may indicate the need for a change in the cost function, or for adding a regularization term. Such profiles however may highly depend on the clamped parameters, making these diagnostics an inexact science.
 #   - Test fitting stability with the standard *SciPy* optimizers.
 #
-# ```{tableofcontents}
-# ```
-#
 # > **NOTE** Some of these tests are dated, and their objective better accomplished by another. In particular, the test in [One-step-forward cost](./One-step-forward cost.ipynb) overlaps with some of those below.
 
 # %%

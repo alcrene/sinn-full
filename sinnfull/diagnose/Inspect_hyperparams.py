@@ -27,8 +27,6 @@
 #     + This might also be related to a too high learning rate.
 #         + For instance, in the particular case of Adam, the only state parameter is the quantity $\frac{\sqrt{1-(1-β_2)^i}}{1 - (1-β_1)^i} \in [0, 1]$, which simply depresses the learning rate over the initial steps.
 #
-# ```{tableofcontents}
-# ```
 
 # %%
 import sinnfull
