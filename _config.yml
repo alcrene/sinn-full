@@ -9,10 +9,9 @@ title                       : "Sinn-full project template"
 author                      : "Alexandre René"
 copyright                   : "2021"
 logo                        : ""
-exclude_patterns            : [_build, Thumbs.db, .DS_Store, "**.ipynb_checkpoints",
-                               ".*", src, lib, "*.egg-info", "*.mypy_cache",
-                               "*.smt", data, labnotes, reports,
-                               "Optimize_WF_template",]
+exclude_patterns            : [_build, Thumbs.db, "**.DS_Store", "**.ipynb_checkpoints",
+                               ".*", "**.egg-info", "*.mypy_cache", "**sinn.graphcache", "**__pycache__",
+                               "**.smt", src, lib, data, envs, run, labnotes, reports]
     # NB: 'data' only excludes the top-level directory.
     #     To exclude all subdirs named 'data', would would do "**data"
     #     (which we don't want, since there is a 'data' subpackage)
@@ -22,7 +21,7 @@ only_build_toc_files        : true
 # Execution settings
 execute:
   execute_notebooks         : "cache"
-  exclude_patterns          : [Optimize_WF_template*]    # A list of patterns to *skip* in execution (e.g. a notebook that takes a really long time)
+  exclude_patterns          : [envs]    # A list of patterns to *skip* in execution (e.g. a notebook that takes a really long time)
   allow_errors              : true
 
 #######################################################################################
