@@ -1,3 +1,17 @@
+---
+jupytext:
+  encoding: '# -*- coding: utf-8 -*-'
+  formats: md:myst,py:percent
+  notebook_metadata_filter: -jupytext.text_representation.jupytext_version
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+kernelspec:
+  display_name: Python (sinn-full)
+  language: python
+  name: sinn-full
+---
 
 # Comparing task files
 

@@ -481,7 +481,7 @@ else:
 
 # %% [markdown]
 # :::{note}
-# :dropdown:  
+# :class: dropdown  
 # Setting the initialization with ground truth works because it is equivalent to
 #
 # - draw values directly in the model space;
@@ -856,5 +856,5 @@ if exec_environment == "notebook":
 # %% [markdown]
 # ---
 
-# %%
+# %% tags=["remove-cell"]
 # %debug

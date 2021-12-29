@@ -28,7 +28,8 @@ parts:
       - file: sinnfull/models/GWN/gwn-objectives
     - file: sinnfull/models/GaussObs/GaussObs
       sections:
-      - file: sinnfull/models/gaussobs-priors
+      - file: sinnfull/models/GaussObs/gaussobs-priors
+      - file: sinnfull/models/GaussObs/gaussobs-objectives
     - file: sinnfull/models/composite_models/composite_models.py
     - file: sinnfull/models/tagcolls
 

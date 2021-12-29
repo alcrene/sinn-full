@@ -78,18 +78,22 @@ The _Optimize_WF_template_ is the highest-level description of the inference pro
 ### Run an example workflow
 
 - Ensure you've paired the notebook with an ipynb file, as outlined [above](#to-run-a-single-example).
-- Navigate to _workflows_ and open the file _Generate tasks.py_ as a notebook.
-- Optionally change some parameters, then run the notebook. This executes the code file _Optimize_WF_template.ipynb_ for every parameter set.
+- Navigate to _workflows_ and open the file [_Generate tasks.py_](./sinnfull/workflows/Generate%20tasks.py) as a notebook.
+- Optionally change some parameters, then run the notebook. This executes the code file [_Optimize_WF_template.ipynb_](./sinnfull/workflows/Optimize_WF_template.ipynb) for every parameter set.
   + Each time this file is executed, it creates a [_task file_](https://github.com/alcrene/smttask), which is saved in a directory _tasklist_.
   + Task files are self-contained units of work. They can for example be created on one machine and executed on another.
 - From a console, navigate to the directory _workflows/tasklist_ and execute  
-  `smttask run *`  
+
+      smttask run *
+      
   to execute all task files in the directory.
   A variety of run options options are provide, which can be listed with `smttask run --help` to see them. The `-n` option in particular allows to specify the number of employed CPU cores, and the `--pdb` option can be used to debug a script.
 
 ::: {note}  
-The `smttask run` command is meant as a convenient command for executing small batches of tasks. Although it provides basic multiprocessing capabilities, it is not intended to replace a full blown task scheduler like [snakemake](https://snakemake.readthedocs.io/en/stable/) or [doit](https://pydoit.org/). To use a scheduler, create a scheduler task with executes the created task file(s) (e.g. with `smttask run`).  
+The `smttask run` command is meant as a convenient command for executing small batches of tasks. Although it provides basic multiprocessing capabilities, it is not intended to replace a full blown task scheduler like [snakemake](https://snakemake.readthedocs.io/en/stable/) or [doit](https://pydoit.org/). To use a scheduler, create a job for that scheduler which calls `smttask run` on the desired task file(s).[^scheduler]
 :::
+
+[^scheduler]: For more fine-grained control, instead of using the command line interface of `smttask run`, a job can also load tasks directly and call their `.run()` method. (Presuming the scheduler can execute Python code.)
 
 ### View fit results
 
@@ -157,7 +161,7 @@ Look especially for chevrons `<<<` and expressions bracketed with `{> … <}`.
 
 ### Generate the HTML project browser
 
-This project's [HTML pages]() were created with [JupyterBook](https://jupyterbook.org/file-types/jupytext.html?highlight=jupytext). They can be recreated from your local copy by navigating to the directory containing this README and typing
+This project's [HTML pages](https://sinn-full.readthedocs.io) were created with [JupyterBook](https://jupyterbook.org/file-types/jupytext.html?highlight=jupytext). They can be recreated from your local copy by navigating to the directory containing this README and typing
 ```
 jb build .
 ```
