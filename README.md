@@ -178,6 +178,33 @@ jb toc . && grep -v __init__ _toc.yml | grep -v setup | grep -v "/_" | grep -v c
 
 (The first command `jb toc .` creates the table of contents, and the other commands remove various undesired patters.) The resulting *_toc.yml* will likely still require some editing, for example to set the order of sections.
 
+### Publishing to Read the Docs
+
+**Quick start:**
+
+- Install [pre-commit](https://pre-commit.com/).
+
+      pip install --user pre-commit
+      pre-commit install
+      
+- Make and push a new commit.
+- [Import](https://docs.readthedocs.io/en/stable/tutorial/#importing-the-project-to-read-the-docs) the project using Read the Docs' web interface.
+
+**Explanation:**
+
+The configuration format required by Jupyter Book and Read the Docs is slightly different; [pre-commit](https://pre-commit.com/) is used to add a git hook: every time a new commit is made, it translates the Jupyter Book configuration at *_config.yml* and creates/updates the file *conf.py*. If this file changes, the commit is blocked: you need to also commit *conf.py*, thus ensuring that *_config.yml* and *conf.py* always stay in sync.
+For more information, see the relevant page in the [Jupyter Book docs](https://jupyterbook.org/publish/readthedocs.html); the blurb in the [RTD docs](https://docs.readthedocs.io/en/stable/faq.html#how-can-i-deploy-jupyter-book-projects-on-read-the-docs) and the Jupyter Book's documentation on [Sphinx usage](https://jupyterbook.org/sphinx/index.html#sphinx-usage-and-customization) may also be useful.
+
+This project template already contains default files *.readthedocs.yaml* and *.pre-commit-config.yaml*, required to configure *Read the Docs* and *pre-commit* respectively – these should work in most cases, but you should check that they correspond to your needs.
+
+:::{note}
+Free accounts on Read the Docs only support public repositories.
+:::
+
+### Other options for hosted publishing
+
+It is also possible to host the generated HTML on [GitHub Pages](https://docs.github.com/en/github/working-with-github-pages), optionally generating them automatically with a GitHub Action each time the repository is updated. For more information, see the relevant page in the [Jupyter Book docs](https://jupyterbook.org/publish/gh-pages.html).
+
 ## Contributing updates to this template
 
 Projects based on this template are likely to introduce new improvements and fixes to achieve their goals. When possible, we encourage users to propose these improvements as a pull-request to this template repository so that new projects may benefit. However, since a project's code base will have, by design, diverged from *Sinn-full*, this requires more care than usual for upstream contributions. (*Sinn-full* does not want your project-specific stuff ;-) ). The basic idea is to fork a separate copy, and backport the changes into this fork; for reference, the basic steps are documented below.
