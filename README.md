@@ -243,13 +243,13 @@ Because this process involves transferring code between diverged code bases, it 
              
     6. `git am --whitespace=warn --reject /tmp/new-patches/*`
        - `--whitespace=warn` is suggested because Markdown files may use two trailing spaces to indicate a newline.
-       - `--reject` tells git the apply the patch hunks that succeeded, so that you only need to fix those that failed.
+       - `--reject` tells git to apply the patch hunks that succeeded, so that you only need to fix those that failed.
        - The application of some of the patches will generally fail when the file they are applied to has also changed. This will generate .rej files listing the unapplied changes:
          + Go through all .rej files and apply changes manually.
          + As changes are applied, delete the .rej file
          + When there are no .rej files left, stage the files (`git add`)
          + `git am --continue`
-         + Repeat untill all patches are applied
+         + Repeat until all patches are applied
        - If you need to abort the process, you may want to use `git am --quit` instead of `git am --abort` to keep the changes that have already been applied.
        
 - Step 3 is the usual procedure for a PR: push the changes to your forked Sinn-full repo, and open a PR via GitHub.
@@ -259,7 +259,7 @@ Because this process involves transferring code between diverged code bases, it 
 
 ---
 
-# Sinnfull project
+# Sinn-full project
 
 {> Short project description <}
 
@@ -270,11 +270,16 @@ Based on the [Sinn-full](https://github.com/alcrene/sinnvoll) project template.
 If you are on \*nix, the following should suffice:
 
 1. clone this repository onto your machine.
-2. cd to the repository and execute  
-   `bash install.sh`
-4. `smttask init`
 
-If on Windows, perform steps 1. and 2., then set up a conda environment as you normally would. You can use the description of *install.sh* below as guidelines. Don't forgot to do step 4 once the package is installed.
+Then `cd` to the repository's directory and execute
+
+% NB: List numbers currently restart at 1. because of a bug in MyST: https://github.com/executablebooks/MyST-Parser/issues/482
+2.
+       bash install.sh
+3.
+       smttask init
+
+If on Windows, clone the repository, then set up a conda environment as you normally would. You can use the description of *install.sh* below as guidelines. Don't forgot to do run `smttask init` once the package is installed.
 
 The *install.sh* script does the following:
 
@@ -339,12 +344,12 @@ Subpackage (folder) names follow the following convention:
 
 - *verbs* contain notebook files which are task-specific. These files are generally continuously modified and not added to version-control until they reach an 'archive' state. If a particular analysis is expected to be repeated, it may be distilled to a template notebook, which would then be included in version control.
   + Git's [`--skip-worktree` option](https://compiledsuccessfully.dev/git-skip-worktree/) may be useful to keep templates of these files without polluting your version control.
-  + [*diagnose*](./sinnfull/diagnose/index)
+  + [*diagnose*](./sinnfull/diagnose/index)  
     Sample scripts for diagnosing fitting issues.
-  + [*workflows*](./sinnfull/workflows/index)
+  + [*workflows*](./sinnfull/workflows/index)  
     Creation and execution of sequences of tasks. In its simplest form, a task creation script modifies one or more values from a default parameter file, and creates the associated task.
     **This is where to create and run inference tasks.**
-  + [*view*](./sinnfull/view/index)
+  + [*view*](./sinnfull/view/index)  
     Exploring and viewing results of analysis tasks.
 
 ## Misc
