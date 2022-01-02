@@ -15,7 +15,7 @@ exclude_patterns            : [_build, Thumbs.db, "**.DS_Store", "**.ipynb_check
     # NB: 'data' only excludes the top-level directory.
     #     To exclude all subdirs named 'data', would would do "**data"
     #     (which we don't want, since there is a 'data' subpackage)
-only_build_toc_files        : true
+only_build_toc_files        : false
 
 #######################################################################################
 # Execution settings
@@ -23,6 +23,11 @@ execute:
   execute_notebooks         : "cache"
   exclude_patterns          : [envs]    # A list of patterns to *skip* in execution (e.g. a notebook that takes a really long time)
   allow_errors              : true
+  # timeout                   : -1      # Default: 30  (measured in seconds)
+     # If you need to increase the timeout, that may be a sign that your
+     # compute requirements exceed what Read the Docs provides for free.
+     # To publish your project, you may want to consider self-hosting or
+     # using GitHub Actions with GitHub Pages
 
 #######################################################################################
 # Parse and render settings

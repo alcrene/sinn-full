@@ -22,11 +22,13 @@ setup(
       packages=find_packages(),
 
       install_requires=[  # see also env.yaml
-          # Packages installed from repositories
+          # We want to specify at least all pip-installed packages here, to ensure that
+          # the resolver installs them in the right order when building from env-docs.yaml
+          'jupyter-book',
           'parameters',
           'pymc3',
-          'pydantic',
-          'sumatra>=0.8dev',
+          'pydantic>=1.8.1',
+          'sumatra[git]>=0.8dev',
           'theano_shim>=0.3.0',
           'mackelab_toolbox[iotools,typing,utils,parameters]>=0.2.0a1',
           'smttask>=0.2.0b1',

@@ -10,7 +10,7 @@ dependencies:
   - mkl-service
   - pandas
   - xarray
-  - pydantic>=1.7
+  - pydantic>=1.8.1
   - matplotlib
   - seaborn
   - arviz
@@ -26,13 +26,14 @@ dependencies:
     # papermill must be the same version as on the jupyter server
     # => If Jupyter was installed with pip, papermill must be specified in the pip block below
 
+
   # - "django >=1.8, <2"  # Constraints imposed by Sumatra
   - django=1.8  # Sumatra still doesn't support >1.8, though it wants to
                  # This is an insecure version of Django, so `smtweb` should
                  # only be used locally.
   - pyparsing<3
 
-  - click
+  # - click   # Not needed for docs
 
   - python-blosc
 
@@ -41,18 +42,18 @@ dependencies:
   - ipykernel
   - bokeh
   - jupyter_bokeh
-  # For bokeh export to png (also used by holoviews)
-  - selenium
-  - phantomjs
-  - pillow
+  # # For bokeh export to png (also used by holoviews)
+  # - selenium        # Not needed for docs
+  # - phantomjs
+  # - pillow
 
   # Development
-  - pytest
+  # - pytest         # Not needed for docs
   # - jupyter-book   # Installing jupyter-book from conda seems to cause conflicts with bokeh (Dec 2021)
 
   # - pymc3==3.11
     # pymc3 is moving pretty fast wrt to the Theano-PyMC dependency, so it's probably safest to pin a version
-    # In fact, we need to use our own patched version (see below), because of this issue: https://github.com/pymc-devs/pymc3/issues/4490
+    # In fact, we use our own patched version (see below), because of this issue: https://github.com/pymc-devs/pymc3/issues/4490
     # (Dec 2021: This issue is fixed now, so we should try reverting to an official version)
 
   - pip
@@ -68,6 +69,10 @@ dependencies:
     # (From reading GitHub issues, the resolver _should_ merge extras, so this
     # probably works when installing from pip.)
     # So we postpone the installation of smttask to a requirements file
-    #- "git+https://github.com/alcrene/smttask#egg=smttask"
+    - "smttask @ git+https://github.com/alcrene/smttask"
     - "sinn @ git+https://github.com/mackelab/sinn"
     - "pymc3 @ git+https://github.com/alcrene/pymc3@c0753dbb0a7de6d0af0711be0223c80ecd7a5432"
+    
+    # >>>>> CHANGE THIS LINE TO POINT TO YOUR PACKAGE >>>>>
+    - "sinnfull @ git+https://github.com/alcrene/sinn-full"
+    # <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<

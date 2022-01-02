@@ -187,8 +187,9 @@ jb toc . && grep -v __init__ _toc.yml | grep -v setup | grep -v "/_" | grep -v c
       pip install --user pre-commit
       pre-commit install
       
-- Make and push a new commit.
-- [Import](https://docs.readthedocs.io/en/stable/tutorial/#importing-the-project-to-read-the-docs) the project using Read the Docs' web interface.
+- Add your package to [env-docs.yaml](./env-docs.yaml) (look for the `>>>>>` signpost).
+- Commit your change and push.
+- [Import](https://docs.readthedocs.io/en/stable/intro/import-guide.html) the project using Read the Docs' web interface.
 
 **Explanation:**
 
@@ -203,7 +204,7 @@ Free accounts on Read the Docs only support public repositories.
 
 ### Other options for hosted publishing
 
-It is also possible to host the generated HTML on [GitHub Pages](https://docs.github.com/en/github/working-with-github-pages), optionally generating them automatically with a GitHub Action each time the repository is updated. For more information, see the relevant page in the [Jupyter Book docs](https://jupyterbook.org/publish/gh-pages.html).
+It is also possible to generate the HTML yourself and host it on your own server or on a service like [GitHub Pages](https://docs.github.com/en/github/working-with-github-pages). In the latter case, it is also possible to setup a GitHub Action which recompiles the project each time the repository is updated, achieving the same level of automation as the Read the Docs solution. One advantage of using GitHub Actions is that they provide more free computation resources compared to Read the Docs. For more information, see the relevant page in the [Jupyter Book docs](https://jupyterbook.org/publish/gh-pages.html).
 
 ## Contributing updates to this template
 
