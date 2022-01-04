@@ -6,9 +6,9 @@
 author = 'Alexandre René'
 comments_config = {'hypothesis': False, 'utterances': False}
 copyright = '2021'
-exclude_patterns = ['**.DS_Store', '**.egg-info', '**.ipynb_checkpoints', '**.smt', '**__pycache__', '**sinn.graphcache', '*.mypy_cache', '.*', '.DS_Store', 'Thumbs.db', '_build', 'data', 'envs', 'labnotes', 'lib', 'reports', 'run', 'src']
+exclude_patterns = ['**.DS_Store', '**.egg-info', '**.ipynb_checkpoints', '**.smt', '**Untitled.ipynb', '**__pycache__', '**sinn.graphcache', '*.mypy_cache', '.*', '.DS_Store', 'Thumbs.db', '_build', 'conf.py', 'data', 'envs', 'labnotes', 'lib', 'rename.py', 'reports', 'run', 'setup.py', 'src', 'tests']
 execution_allow_errors = True
-execution_excludepatterns = ['envs']
+execution_excludepatterns = ['envs', 'tests', 'src', 'rename.py', 'setup.py', 'conf.py']
 execution_in_temp = False
 execution_timeout = 30
 extensions = ['sphinx_togglebutton', 'sphinx_copybutton', 'myst_nb', 'jupyter_book', 'sphinx_thebe', 'sphinx_comments', 'sphinx_external_toc', 'sphinx.ext.intersphinx', 'sphinx_panels', 'sphinx_book_theme', 'sphinx_jupyterbook_latex']

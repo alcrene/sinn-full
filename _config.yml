@@ -11,7 +11,9 @@ copyright                   : "2021"
 logo                        : ""
 exclude_patterns            : [_build, Thumbs.db, "**.DS_Store", "**.ipynb_checkpoints",
                                ".*", "**.egg-info", "*.mypy_cache", "**sinn.graphcache", "**__pycache__",
-                               "**.smt", src, lib, data, envs, run, labnotes, reports]
+                               "**.smt", conf.py, rename.py, setup.py, "**Untitled.ipynb",
+                               src, lib, data, envs, tests,
+                               run, labnotes, reports]
     # NB: 'data' only excludes the top-level directory.
     #     To exclude all subdirs named 'data', would would do "**data"
     #     (which we don't want, since there is a 'data' subpackage)
@@ -21,7 +23,8 @@ only_build_toc_files        : false
 # Execution settings
 execute:
   execute_notebooks         : "cache"
-  exclude_patterns          : [envs]    # A list of patterns to *skip* in execution (e.g. a notebook that takes a really long time)
+  exclude_patterns          : [envs, tests, src,  # A list of patterns to *skip* in execution (e.g. a notebook that takes a really long time)
+                               rename.py, setup.py, conf.py]
   allow_errors              : true
   # timeout                   : -1      # Default: 30  (measured in seconds)
      # If you need to increase the timeout, that may be a sign that your
