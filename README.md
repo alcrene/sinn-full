@@ -27,6 +27,7 @@ A complete, end-to-end workflow template for inferring dynamical models, so you 
 
 ## Getting started
 
+1. Log in to GitHub.
 1. Click the [“Use this template” button](https://github.com/alcrene/sinnvoll/generate) in the GitHub interface.
 2. Choose a project name and answer the prompts.
 3. Clone your new project onto your computer.
